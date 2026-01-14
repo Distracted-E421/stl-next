@@ -373,10 +373,11 @@ pub const PureLevelDbReader = struct {
 
 test "parse isHidden from JSON" {
     const allocator = std.testing.allocator;
+    const db_path = try allocator.dupe(u8, "/tmp/test");
     var collections = SteamCollections{
         .allocator = allocator,
         .steam_id = 12345,
-        .db_path = "/tmp/test",
+        .db_path = db_path,
         .hidden_cache = std.AutoHashMap(u32, bool).init(allocator),
         .tags_cache = std.AutoHashMap(u32, []const []const u8).init(allocator),
     };
@@ -395,10 +396,11 @@ test "parse isHidden from JSON" {
 
 test "parse tags from JSON" {
     const allocator = std.testing.allocator;
+    const db_path = try allocator.dupe(u8, "/tmp/test");
     var collections = SteamCollections{
         .allocator = allocator,
         .steam_id = 12345,
-        .db_path = "/tmp/test",
+        .db_path = db_path,
         .hidden_cache = std.AutoHashMap(u32, bool).init(allocator),
         .tags_cache = std.AutoHashMap(u32, []const []const u8).init(allocator),
     };

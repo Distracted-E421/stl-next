@@ -522,9 +522,22 @@ fn handleNxmLink(allocator: std.mem.Allocator, url: []const u8) !void {
     var link = try modding.NxmLink.parse(allocator, url);
     defer link.deinit(allocator);
 
-    std.log.info("  Game: {s}", .{link.game_domain});
-    std.log.info("  Mod ID: {d}", .{link.mod_id});
-    std.log.info("  File ID: {d}", .{link.file_id});
+    // Display parsed info
+    const formatted = try link.toDisplayString(allocator);
+    defer allocator.free(formatted);
+    std.log.info("  Parsed: {s}", .{formatted});
+
+    // Show if it's valid
+    if (link.isValid()) {
+        std.log.info("  Status: Valid link", .{});
+        
+        // Get wine-safe encoded URL
+        const encoded = try link.encodeForWine(allocator);
+        defer allocator.free(encoded);
+        std.log.debug("  Wine-safe: {s}", .{encoded});
+    } else {
+        std.log.warn("  Status: Incomplete or invalid link", .{});
+    }
 
     // Would forward to mod manager here
     std.log.info("NXM handling requires mod manager integration (MO2/Vortex)", .{});
@@ -542,4 +555,28 @@ test "command parsing" {
 test "appid parsing" {
     const app_id = try std.fmt.parseInt(u32, "413150", 10);
     try std.testing.expectEqual(@as(u32, 413150), app_id);
+}
+
+// Import all test modules to run them
+test {
+    // Core modules
+    _ = @import("core/config.zig");
+    _ = @import("core/launcher.zig");
+    
+    // Engine modules
+    _ = @import("engine/vdf.zig");
+    _ = @import("engine/steam.zig");
+    _ = @import("engine/appinfo.zig");
+    _ = @import("engine/leveldb.zig");
+    
+    // IPC modules
+    _ = @import("ipc/protocol.zig");
+    _ = @import("ipc/server.zig");
+    _ = @import("ipc/client.zig");
+    
+    // Modding modules
+    _ = @import("modding/manager.zig");
+    
+    // Edge case tests (comprehensive hardening)
+    _ = @import("tests/edge_cases.zig");
 }
