@@ -1,31 +1,54 @@
 # STL-Next: Steam Tinker Launch - Next Generation
 
-A high-performance Steam game wrapper written in Zig, designed as a modern replacement for the 21,000-line Bash script that is SteamTinkerLaunch.
+A high-performance Steam game wrapper written in Zig, replacing the 21,000-line Bash script with a type-safe, modular architecture.
 
-## 🚀 Performance
+## 🎯 Project Status
 
-STL-Next achieves sub-millisecond performance for most operations:
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1 | ✅ Complete | Core CLI, VDF text parsing, basic Steam discovery |
+| Phase 2 | ✅ Complete | Binary VDF streaming, LevelDB collections, fast AppID seeking |
+| Phase 3 | 🚧 In Progress | Tinker module system, Wine prefix orchestration |
+| Phase 4 | ⏳ Planned | GUI (Raylib), full game launch, ReShade/MO2 integration |
 
-| Operation | Time | vs. Original STL |
-|-----------|------|------------------|
-| Steam Discovery | **0.10 ms** | ~100x faster |
-| Game Lookup | **0.09 ms** | ~1000x faster |
-| List All Games | **2.72 ms** | ~500x faster |
-| List Protons | **0.05 ms** | ~200x faster |
+## 🚀 Performance (Phase 2 Benchmarks)
 
-All operations complete in under 100ms. Compare to 2-5 seconds for the original Bash STL.
+```
+╔══════════════════════════════════════════════════════════════╗
+║              STL-NEXT PHASE 2 BENCHMARK                      ║
+╚══════════════════════════════════════════════════════════════╝
 
-## 📦 Installation (NixOS)
+Steam Discovery:         0.10 ms
+Game Lookup (413150):    0.09 ms (Stardew Valley)
+List All Games:          2.72 ms (42 games)
+List Protons:            0.05 ms (12 versions)
 
+Target: All operations < 100ms ✓
+```
+
+Compare to original STL: **2-5 seconds** for similar operations.
+
+## 📦 Installation
+
+### NixOS (Recommended)
 ```bash
-# Enter development shell
+# Clone and enter dev shell
+git clone https://github.com/e421/stl-next
 cd stl-next
 nix develop
 
-# Build release binary
+# Build
 zig build -Doptimize=ReleaseFast
 
-# Binary is at ./zig-out/bin/stl-next
+# Run
+./zig-out/bin/stl-next help
+```
+
+### Other Linux
+```bash
+# Requires Zig 0.13.0
+zig build -Doptimize=ReleaseFast
+./zig-out/bin/stl-next help
 ```
 
 ## 🔧 Usage
@@ -34,128 +57,62 @@ zig build -Doptimize=ReleaseFast
 # Show help
 stl-next help
 
-# Get game info (JSON)
+# Launch a game (shorthand)
+stl-next 413150                    # Stardew Valley
+
+# Get game information (JSON)
 stl-next info 413150
 
 # List installed games
 stl-next list-games | jq '.[]'
 
-# List available Proton versions
+# List Proton versions
 stl-next list-protons
 
-# Launch a game (shorthand)
-stl-next 413150
-
-# Run benchmark
+# Run performance benchmark
 stl-next benchmark
 ```
 
 ## 🏗️ Architecture
 
-STL-Next is built with three guiding principles:
-
-1. **Performance**: Sub-100ms launch overhead (vs 2-5s in Bash)
-2. **Modularity**: Strict separation of "Tinker" modules from core engine
-3. **NixOS Native**: No hardcoded paths, proper PATH resolution
-
-### Phase Status
-
-| Phase | Status | Description |
-|-------|--------|-------------|
-| Phase 1 | ✅ Complete | Core scaffolding, CLI, basic Steam discovery |
-| Phase 2 | ✅ Complete | Binary VDF parser, fast AppID seeking, LevelDB collections |
-| Phase 3 | 🚧 Next | Prefix orchestration, Wine/Proton management |
-| Phase 4 | 📋 Planned | Tinker module system (Gamescope, MangoHud, etc.) |
-| Phase 5 | 📋 Planned | GUI with Raylib |
-
-### Core Components
-
 ```
-src/
-├── main.zig          # CLI entry point
-├── core/
-│   ├── config.zig    # Game config management
-│   └── launcher.zig  # Game launch orchestration
-└── engine/
-    ├── steam.zig     # Steam installation discovery
-    ├── appinfo.zig   # Binary VDF parser (appinfo.vdf)
-    ├── vdf.zig       # VDF format utilities
-    └── leveldb.zig   # Steam collections (hidden games, categories)
+stl-next/
+├── src/
+│   ├── main.zig              # CLI entry point
+│   ├── core/
+│   │   ├── config.zig        # Game configuration management
+│   │   └── launcher.zig      # Launch orchestration
+│   └── engine/
+│       ├── steam.zig         # Steam discovery & library management
+│       ├── vdf.zig           # Text VDF parser
+│       ├── appinfo.zig       # Binary VDF streaming parser
+│       └── leveldb.zig       # Steam collections (pure Zig)
+├── build.zig                 # Zig build system
+├── flake.nix                 # NixOS development environment
+└── justfile                  # Task runner commands
 ```
 
-## 🎯 Design Goals
+## 🎮 Phase 2 Features
 
-### Binary VDF Streaming Parser
+- **Binary VDF Streaming Parser**: Parses Steam's 200MB+ appinfo.vdf in <10ms
+- **Fast AppID Seeking**: O(1) jumps to specific games without parsing entire file
+- **LevelDB Collections**: Pure Zig reader for Steam's hidden games & categories
+- **Proton Detection**: Finds all installed Proton versions across libraries
 
-The `appinfo.vdf` file can be 200MB+. STL-Next parses it in under 10ms using:
-- Memory-mapped file I/O
-- O(1) seeking to specific AppIDs
-- Lazy parsing (only decode what's needed)
+## 🔜 Phase 3 Roadmap
 
-### LevelDB Collections Support
-
-Steam stores user collections (categories, hidden status) in LevelDB. STL-Next includes:
-- Pure Zig LevelDB reader (no C dependencies)
-- Game hidden status detection
-- Collection/tag retrieval
-
-### NixOS-First Design
-
-- No hardcoded paths (uses `$HOME`, `$XDG_*`)
-- Works with both native Steam and Flatpak
-- Proper Nix flake with reproducible builds
-
-## 📊 Example Output
-
-```bash
-$ ./zig-out/bin/stl-next info 413150
-{
-  "app_id": 413150,
-  "name": "Stardew Valley",
-  "install_dir": "/home/user/.steam/steam/steamapps/common/Stardew Valley",
-  "executable": null,
-  "proton_version": null,
-  "playtime_minutes": 0,
-  "is_hidden": false,
-  "collections": [],
-  "_lookup_time_ms": 0.187
-}
-
-$ ./zig-out/bin/stl-next benchmark
-
-╔══════════════════════════════════════════════════════════════╗
-║              STL-NEXT PHASE 2 BENCHMARK                      ║
-╚══════════════════════════════════════════════════════════════╝
-
-Steam Discovery:         0.10 ms
-Game Lookup (413150):     0.09 ms (Stardew Valley)
-List All Games:          2.72 ms (42 games)
-List Protons:            0.05 ms (12 versions)
-
-Target: All operations < 100ms ✓
-Binary VDF seeking: O(1) per skip
-```
-
-## 🛠️ Development
-
-```bash
-# Build debug
-zig build
-
-# Build release
-zig build -Doptimize=ReleaseFast
-
-# Run tests
-zig build test
-
-# Run with arguments
-zig build run -- benchmark
-```
+- [ ] Tinker module system (Gamescope, MangoHud, GameMode)
+- [ ] Wine prefix orchestration
+- [ ] Per-game configuration files
+- [ ] Environment variable injection
+- [ ] Proton launch wrapper
 
 ## 📜 License
 
-MIT
+MIT - See LICENSE file
 
-## 🙏 Credits
+## 🙏 Acknowledgments
 
-Inspired by the incredible work of [SteamTinkerLaunch](https://github.com/sonic2kk/steamtinkerlaunch) by sonic2kk.
+- Original [SteamTinkerLaunch](https://github.com/sonic2kk/steamtinkerlaunch) by frostworx
+- Valve for Steam on Linux
+- The Zig community
