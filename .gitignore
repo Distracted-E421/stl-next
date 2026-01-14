@@ -1,0 +1,32 @@
+# Zig build artifacts
+zig-out/
+zig-cache/
+.zig-cache/
+
+# Nix
+result
+result-*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Distribution
+dist/
+*.tar.gz
+*.zip
+
+# Testing
+coverage/
+*.profraw
+
+# Local config (for development testing)
+.stl-next-dev/
+
