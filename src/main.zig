@@ -30,7 +30,7 @@ pub const std_options = std.Options{
     .log_level = if (builtin.mode == .Debug) .debug else .info,
 };
 
-const VERSION = "0.2.0-alpha";
+const VERSION = "0.3.0-alpha";
 
 const Command = enum {
     run,

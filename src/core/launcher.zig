@@ -1,16 +1,18 @@
 const std = @import("std");
 const steam = @import("../engine/steam.zig");
 const config = @import("config.zig");
+const tinkers = @import("../tinkers/mod.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // LAUNCHER: Game Launch Orchestration
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // Orchestrates the game launch process:
-// 1. Build environment variables
-// 2. Apply Tinker module modifications
-// 3. Construct command vector
-// 4. Execute (fork/exec)
+// 1. Load game configuration
+// 2. Initialize tinker registry
+// 3. Build launch context
+// 4. Execute tinker pipeline (prepare → env → args)
+// 5. Launch the game
 //
 // Performance target: <50ms from invocation to exec()
 //
@@ -22,12 +24,56 @@ pub fn launch(
     app_id: u32,
     extra_args: []const []const u8,
 ) !void {
-    _ = extra_args;
-
-    // Phase 1: Build environment
+    var timer = try std.time.Timer.start();
+    
+    // Phase 1: Load game configuration
+    const game_config = config.loadGameConfig(allocator, app_id) catch config.GameConfig.defaults(app_id);
+    
+    // Apply tinker configs to their respective modules
+    game_config.applyTinkerConfigs();
+    
+    // Phase 2: Build launch context
+    const game_info = try steam_engine.getGameInfo(app_id);
+    const config_dir = try config.getConfigDir(allocator);
+    defer allocator.free(config_dir);
+    
+    const prefix_path = try std.fmt.allocPrint(
+        allocator,
+        "{s}/steamapps/compatdata/{d}/pfx",
+        .{ steam_engine.steam_path, app_id },
+    );
+    defer allocator.free(prefix_path);
+    
+    const scratch_dir = try std.fmt.allocPrint(
+        allocator,
+        "/tmp/stl-next/{d}",
+        .{app_id},
+    );
+    defer allocator.free(scratch_dir);
+    
+    // Ensure scratch dir exists
+    std.fs.makeDirAbsolute("/tmp/stl-next") catch {};
+    std.fs.makeDirAbsolute(scratch_dir) catch {};
+    
+    const ctx = tinkers.Context{
+        .allocator = allocator,
+        .app_id = app_id,
+        .game_name = game_info.name,
+        .install_dir = game_info.install_dir,
+        .proton_path = game_info.proton_version,
+        .prefix_path = prefix_path,
+        .config_dir = config_dir,
+        .scratch_dir = scratch_dir,
+    };
+    
+    // Phase 3: Initialize tinker registry and run pipeline
+    var registry = try tinkers.initBuiltinRegistry(allocator);
+    defer registry.deinit();
+    
+    // Build environment
     var env = std.process.EnvMap.init(allocator);
     defer env.deinit();
-
+    
     // Inherit current environment
     var inherited_env = try std.process.getEnvMap(allocator);
     defer inherited_env.deinit();
@@ -35,68 +81,60 @@ pub fn launch(
     while (env_iter.next()) |entry| {
         try env.put(entry.key_ptr.*, entry.value_ptr.*);
     }
-
-    // Phase 2: Load game config and apply Tinker modifications
-    const game_config = config.loadGameConfig(allocator, app_id) catch config.GameConfig.defaults(app_id);
-
-    // Apply MangoHud if enabled
-    if (game_config.mangohud.enabled) {
-        try env.put("MANGOHUD", "1");
-        try env.put("MANGOHUD_DLSYM", "1");
-        std.log.info("MangoHud: ENABLED", .{});
-    }
-
-    // Apply GameMode if enabled
-    if (game_config.gamemode) {
-        // GameMode is typically activated via LD_PRELOAD or wrapper
-        std.log.info("GameMode: ENABLED", .{});
-    }
-
-    // Phase 3: Build command vector
-    var cmd = std.ArrayList([]const u8).init(allocator);
-    defer cmd.deinit();
-
-    // Apply Gamescope wrapper if enabled
-    if (game_config.gamescope.enabled) {
-        const gs_args = try game_config.gamescope.buildArgs(allocator);
-        for (gs_args) |arg| {
-            try cmd.append(arg);
-        }
-    }
-
-    // Find the game's executable
-    const game_info = try steam_engine.getGameInfo(app_id);
     
-    // Get executable path, falling back to a placeholder
+    // Build argument list
+    var args = std.ArrayList([]const u8).init(allocator);
+    defer args.deinit();
+    
+    // Get executable path
     const executable = game_info.executable orelse {
         std.log.warn("No executable found for AppID {d}", .{app_id});
         return error.NoExecutable;
     };
-
-    // Determine launch method (native vs Proton)
+    
+    // Determine launch method
     if (game_config.use_native or game_info.proton_version == null) {
         // Native Linux game
-        try cmd.append(executable);
+        try args.append(executable);
     } else {
-        // Proton game - need to wrap with Proton
+        // Proton game
         const proton_path = try findProtonBinary(allocator, steam_engine, game_info.proton_version);
-        try cmd.append(proton_path);
-        try cmd.append("run");
-        try cmd.append(executable);
+        try args.append(proton_path);
+        try args.append("run");
+        try args.append(executable);
     }
-
-    // Phase 4: Execute
-    std.log.info("Launching: {s}", .{cmd.items[0]});
-
-    // In a real implementation, we would use std.process.Child or execv
-    // For now, just log what we would do
-    std.log.debug("Command vector:", .{});
-    for (cmd.items) |arg| {
-        std.log.debug("  {s}", .{arg});
+    
+    // Add extra args
+    for (extra_args) |arg| {
+        try args.append(arg);
     }
-
+    
+    // Phase 4: Run tinker pipeline
+    try registry.runAll(&ctx, &env, &args);
+    
+    // Phase 5: Report and execute
+    const setup_time = timer.read();
+    std.log.info("Launch setup completed in {d:.2}ms", .{
+        @as(f64, @floatFromInt(setup_time)) / std.time.ns_per_ms,
+    });
+    
+    std.log.info("╔══════════════════════════════════════════╗", .{});
+    std.log.info("║ Launch Command                           ║", .{});
+    std.log.info("╠══════════════════════════════════════════╣", .{});
+    for (args.items, 0..) |arg, i| {
+        if (i == 0) {
+            std.log.info("║ {s: <40} ║", .{arg[0..@min(40, arg.len)]});
+        } else {
+            std.log.debug("║   {s: <38} ║", .{arg[0..@min(38, arg.len)]});
+        }
+    }
+    std.log.info("╚══════════════════════════════════════════╝", .{});
+    
     std.log.info("Environment variables set: {d}", .{env.count()});
-    std.log.info("Phase 1 complete - actual exec() not implemented yet", .{});
+    
+    // In a real implementation, we would use std.process.execve
+    // For now, just report what we would do
+    std.log.info("Phase 3 complete - actual exec() not yet implemented", .{});
 }
 
 fn findProtonBinary(
@@ -143,5 +181,4 @@ fn findProtonBinary(
 
 test "find proton binary returns error when not found" {
     // This would need a mock steam engine to test properly
-    // For now, just verify the function compiles
 }

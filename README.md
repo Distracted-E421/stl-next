@@ -8,14 +8,14 @@ A high-performance Steam game wrapper written in Zig, replacing the 21,000-line 
 |-------|--------|-------------|
 | Phase 1 | ✅ Complete | Core CLI, VDF text parsing, basic Steam discovery |
 | Phase 2 | ✅ Complete | Binary VDF streaming, LevelDB collections, fast AppID seeking |
-| Phase 3 | 🚧 In Progress | Tinker module system, Wine prefix orchestration |
-| Phase 4 | ⏳ Planned | GUI (Raylib), full game launch, ReShade/MO2 integration |
+| Phase 3 | ✅ Complete | Tinker module system (MangoHud, Gamescope, GameMode) |
+| Phase 4 | 🚧 In Progress | GUI (Raylib), full game launch, mod manager integration |
 
-## 🚀 Performance (Phase 2 Benchmarks)
+## 🚀 Performance (Benchmarks)
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║              STL-NEXT PHASE 2 BENCHMARK                      ║
+║              STL-NEXT BENCHMARK                              ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Steam Discovery:         0.10 ms
@@ -32,21 +32,10 @@ Compare to original STL: **2-5 seconds** for similar operations.
 
 ### NixOS (Recommended)
 ```bash
-# Clone and enter dev shell
 git clone https://github.com/e421/stl-next
 cd stl-next
 nix develop
 
-# Build
-zig build -Doptimize=ReleaseFast
-
-# Run
-./zig-out/bin/stl-next help
-```
-
-### Other Linux
-```bash
-# Requires Zig 0.13.0
 zig build -Doptimize=ReleaseFast
 ./zig-out/bin/stl-next help
 ```
@@ -82,30 +71,70 @@ stl-next/
 │   ├── core/
 │   │   ├── config.zig        # Game configuration management
 │   │   └── launcher.zig      # Launch orchestration
-│   └── engine/
-│       ├── steam.zig         # Steam discovery & library management
-│       ├── vdf.zig           # Text VDF parser
-│       ├── appinfo.zig       # Binary VDF streaming parser
-│       └── leveldb.zig       # Steam collections (pure Zig)
-├── build.zig                 # Zig build system
-├── flake.nix                 # NixOS development environment
-└── justfile                  # Task runner commands
+│   ├── engine/
+│   │   ├── steam.zig         # Steam discovery & library management
+│   │   ├── vdf.zig           # Text VDF parser
+│   │   ├── appinfo.zig       # Binary VDF streaming parser
+│   │   └── leveldb.zig       # Steam collections (pure Zig)
+│   └── tinkers/              # Phase 3: Module System
+│       ├── mod.zig           # Module exports
+│       ├── interface.zig     # Tinker trait definition
+│       ├── mangohud.zig      # MangoHud overlay
+│       ├── gamescope.zig     # Gamescope wrapper
+│       └── gamemode.zig      # Feral GameMode
+├── build.zig
+├── flake.nix
+└── justfile
 ```
 
-## 🎮 Phase 2 Features
+## 🎮 Phase 3: Tinker Module System
 
-- **Binary VDF Streaming Parser**: Parses Steam's 200MB+ appinfo.vdf in <10ms
-- **Fast AppID Seeking**: O(1) jumps to specific games without parsing entire file
-- **LevelDB Collections**: Pure Zig reader for Steam's hidden games & categories
-- **Proton Detection**: Finds all installed Proton versions across libraries
+The Tinker system provides a plugin architecture for game modifications:
 
-## 🔜 Phase 3 Roadmap
+### Available Tinkers
 
-- [ ] Tinker module system (Gamescope, MangoHud, GameMode)
-- [ ] Wine prefix orchestration
-- [ ] Per-game configuration files
-- [ ] Environment variable injection
-- [ ] Proton launch wrapper
+| Tinker | Priority | Function |
+|--------|----------|----------|
+| **GameMode** | 40 (OVERLAY_EARLY) | CPU governor, I/O priority |
+| **MangoHud** | 50 (OVERLAY) | Performance overlay HUD |
+| **Gamescope** | 80 (WRAPPER) | Micro-compositor, FSR upscaling |
+
+### Tinker Lifecycle
+
+1. **preparePrefix**: Filesystem operations (symlinks, file copies)
+2. **modifyEnv**: Environment variable injection
+3. **modifyArgs**: Command line modifications
+
+### Per-Game Configuration
+
+```json
+// ~/.config/stl-next/games/413150.json
+{
+  "app_id": 413150,
+  "mangohud": {
+    "enabled": true,
+    "show_fps": true,
+    "position": "top_right"
+  },
+  "gamescope": {
+    "enabled": true,
+    "width": 1920,
+    "height": 1080,
+    "fsr": true
+  },
+  "gamemode": {
+    "enabled": true
+  }
+}
+```
+
+## 🔜 Phase 4 Roadmap
+
+- [ ] Raylib-based Wait-Requester GUI
+- [ ] IPC daemon/client architecture
+- [ ] Full game launch (exec)
+- [ ] MO2/Vortex integration
+- [ ] ReShade with hash-based updates
 
 ## 📜 License
 
