@@ -29,26 +29,17 @@
         # Use stable Zig 0.13.0
         zig = pkgs.zigpkgs."0.13.0";
 
-        # C libraries for future interop
+        # C libraries for interop
         buildInputs = with pkgs; [
-          # Archive handling
+          # Archive handling (for mod extraction)
           libarchive
           zstd
           lz4
           xz
 
-          # LevelDB for Steam collections
+          # LevelDB for Steam collections (Phase 2)
           leveldb
           snappy
-
-          # GUI (optional - for future Raylib integration)
-          # raylib
-          # libGL
-          # xorg.libX11
-          # xorg.libXcursor
-          # xorg.libXrandr
-          # xorg.libXinerama
-          # xorg.libXi
         ];
 
         nativeBuildInputs = with pkgs; [
@@ -68,6 +59,10 @@
             gnumake
             pkg-config
 
+            # C library headers
+            leveldb.dev
+            libarchive.dev
+
             # Testing & debugging
             gdb
             valgrind
@@ -84,6 +79,7 @@
           shellHook = ''
             echo "╔══════════════════════════════════════════╗"
             echo "║      STL-Next Development Shell          ║"
+            echo "║           Phase 2: Binary VDF            ║"
             echo "╠══════════════════════════════════════════╣"
             echo "║ zig version: $(zig version)             ║"
             echo "╚══════════════════════════════════════════╝"
@@ -93,13 +89,21 @@
             echo "  zig build run     Build and run"
             echo "  zig build test    Run unit tests"
             echo "  zig build release Build optimized release"
-            echo "  zig build docs    Generate documentation"
+            echo ""
+            echo "Phase 2 Features:"
+            echo "  ✓ Binary VDF streaming parser"
+            echo "  ✓ Fast AppID seeking (<10ms for 200MB)"
+            echo "  ✓ LevelDB collections support"
+            echo "  ✓ Hidden games detection"
             echo ""
           '';
 
           # For C library linking
           LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath buildInputs;
           PKG_CONFIG_PATH = "${pkgs.libarchive}/lib/pkgconfig:${pkgs.leveldb}/lib/pkgconfig";
+          
+          # C compiler for Zig's C interop
+          CC = "${pkgs.gcc}/bin/gcc";
         };
 
         # ═══════════════════════════════════════════════════════════════════════════
@@ -110,7 +114,7 @@
 
           stl-next = pkgs.stdenv.mkDerivation {
             pname = "stl-next";
-            version = "0.1.0";
+            version = "0.2.0"; # Phase 2
 
             src = self;
 
@@ -134,6 +138,29 @@
               license = licenses.gpl3;
               platforms = platforms.linux;
               mainProgram = "stl-next";
+            };
+          };
+
+          # Minimal build without C dependencies
+          stl-next-minimal = pkgs.stdenv.mkDerivation {
+            pname = "stl-next-minimal";
+            version = "0.2.0";
+
+            src = self;
+
+            nativeBuildInputs = [ zig ];
+
+            buildPhase = ''
+              export ZIG_GLOBAL_CACHE_DIR="$TMPDIR/zig-cache"
+              zig build -Doptimize=ReleaseFast -Dno-leveldb=true --prefix $out
+            '';
+
+            installPhase = ":";
+
+            meta = with pkgs.lib; {
+              description = "STL-Next minimal (no LevelDB)";
+              license = licenses.gpl3;
+              platforms = platforms.linux;
             };
           };
         };

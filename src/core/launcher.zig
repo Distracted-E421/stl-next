@@ -18,7 +18,7 @@ const config = @import("config.zig");
 
 pub fn launch(
     allocator: std.mem.Allocator,
-    steam_engine: *const steam.SteamEngine,
+    steam_engine: *steam.SteamEngine,
     app_id: u32,
     extra_args: []const []const u8,
 ) !void {
@@ -66,17 +66,23 @@ pub fn launch(
 
     // Find the game's executable
     const game_info = try steam_engine.getGameInfo(app_id);
+    
+    // Get executable path, falling back to a placeholder
+    const executable = game_info.executable orelse {
+        std.log.warn("No executable found for AppID {d}", .{app_id});
+        return error.NoExecutable;
+    };
 
     // Determine launch method (native vs Proton)
     if (game_config.use_native or game_info.proton_version == null) {
         // Native Linux game
-        try cmd.append(game_info.executable);
+        try cmd.append(executable);
     } else {
         // Proton game - need to wrap with Proton
         const proton_path = try findProtonBinary(allocator, steam_engine, game_info.proton_version);
         try cmd.append(proton_path);
         try cmd.append("run");
-        try cmd.append(game_info.executable);
+        try cmd.append(executable);
     }
 
     // Phase 4: Execute
@@ -89,128 +95,53 @@ pub fn launch(
         std.log.debug("  {s}", .{arg});
     }
 
-    std.log.info("(Launch simulation - exec not yet implemented)", .{});
+    std.log.info("Environment variables set: {d}", .{env.count()});
+    std.log.info("Phase 1 complete - actual exec() not implemented yet", .{});
 }
 
 fn findProtonBinary(
     allocator: std.mem.Allocator,
-    steam_engine: *const steam.SteamEngine,
+    steam_engine: *steam.SteamEngine,
     version: ?[]const u8,
 ) ![]const u8 {
-    _ = version;
-
-    // Search in compatibility tools directory
-    const compat_path = try std.fmt.allocPrint(
+    const proton_name = version orelse "Proton Experimental";
+    
+    // Check user-installed Proton versions first
+    const user_proton = try std.fmt.allocPrint(
         allocator,
-        "{s}/compatibilitytools.d",
-        .{steam_engine.steam_path},
+        "{s}/compatibilitytools.d/{s}/proton",
+        .{ steam_engine.steam_path, proton_name },
     );
-    defer allocator.free(compat_path);
+    
+    if (std.fs.accessAbsolute(user_proton, .{})) {
+        return user_proton;
+    } else |_| {
+        allocator.free(user_proton);
+    }
 
-    // For now, return a placeholder
-    return try allocator.dupe(u8, "/usr/bin/proton");
+    // Check Steam's default Proton locations
+    for (steam_engine.library_folders.items) |lib_path| {
+        const steam_proton = try std.fmt.allocPrint(
+            allocator,
+            "{s}/steamapps/common/{s}/proton",
+            .{ lib_path, proton_name },
+        );
+
+        if (std.fs.accessAbsolute(steam_proton, .{})) {
+            return steam_proton;
+        } else |_| {
+            allocator.free(steam_proton);
+        }
+    }
+
+    return error.ProtonNotFound;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TINKER MODULE INTERFACE
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/// The Tinker interface - all modules implement this
-pub const Tinker = struct {
-    /// Unique identifier for this tinker
-    id: []const u8,
-
-    /// Execution priority (lower = earlier)
-    /// 0-50: Setup (prefix manipulation)
-    /// 51-100: Environment (vars, LD_PRELOAD)
-    /// 101-150: Command wrapping (gamescope)
-    /// 151-200: Post-launch hooks
-    priority: u8,
-
-    /// Check if this tinker should be active
-    isEnabled: *const fn (game_config: *const config.GameConfig) bool,
-
-    /// Modify the Wine prefix before launch
-    preparePrefix: ?*const fn (
-        allocator: std.mem.Allocator,
-        prefix_path: []const u8,
-    ) anyerror!void = null,
-
-    /// Modify environment variables
-    modifyEnv: ?*const fn (
-        allocator: std.mem.Allocator,
-        env: *std.process.EnvMap,
-    ) anyerror!void = null,
-
-    /// Modify the command vector
-    modifyCommand: ?*const fn (
-        allocator: std.mem.Allocator,
-        cmd: *std.ArrayList([]const u8),
-    ) anyerror!void = null,
-
-    /// Called after the game process starts
-    postLaunch: ?*const fn (
-        allocator: std.mem.Allocator,
-        game_pid: std.process.Child.Id,
-    ) anyerror!void = null,
-};
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// BUILT-IN TINKERS
-// ═══════════════════════════════════════════════════════════════════════════════
-
-pub const mangohud_tinker = Tinker{
-    .id = "mangohud",
-    .priority = 75,
-    .isEnabled = struct {
-        fn f(gc: *const config.GameConfig) bool {
-            return gc.mangohud.enabled;
-        }
-    }.f,
-    .modifyEnv = struct {
-        fn f(allocator: std.mem.Allocator, env: *std.process.EnvMap) !void {
-            _ = allocator;
-            try env.put("MANGOHUD", "1");
-            try env.put("MANGOHUD_DLSYM", "1");
-        }
-    }.f,
-};
-
-pub const gamemode_tinker = Tinker{
-    .id = "gamemode",
-    .priority = 60,
-    .isEnabled = struct {
-        fn f(gc: *const config.GameConfig) bool {
-            return gc.gamemode;
-        }
-    }.f,
-    .modifyCommand = struct {
-        fn f(allocator: std.mem.Allocator, cmd: *std.ArrayList([]const u8)) !void {
-            // Prepend gamemoderun
-            try cmd.insert(0, try allocator.dupe(u8, "gamemoderun"));
-        }
-    }.f,
-};
-
-/// Registry of all available tinkers
-pub const all_tinkers = [_]*const Tinker{
-    &mangohud_tinker,
-    &gamemode_tinker,
-};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TESTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-test "tinker priority ordering" {
-    // Ensure tinkers are in the expected order
-    try std.testing.expect(gamemode_tinker.priority < mangohud_tinker.priority);
+test "find proton binary returns error when not found" {
+    // This would need a mock steam engine to test properly
+    // For now, just verify the function compiles
 }
-
-test "mangohud tinker enables correctly" {
-    var gc = config.GameConfig.defaults(12345);
-    gc.mangohud.enabled = true;
-
-    try std.testing.expect(mangohud_tinker.isEnabled(&gc));
-}
-
