@@ -194,6 +194,61 @@ Edge case tests in `src/tests/edge_cases.zig`:
 - [ ] ReShade with hash-based updates
 - [ ] Steam Deck gamepad support
 
+## 📚 Documentation
+
+### Core Documentation
+
+| Document | Description |
+|----------|-------------|
+| [IPC Protocol](docs/IPC_PROTOCOL.md) | Full specification of the daemon/client protocol |
+| [Architecture](docs/ARCHITECTURE.md) | Code structure and component overview |
+| [Feature Roadmap](docs/FEATURE_ROADMAP.md) | Comparison with original STL + future plans |
+| [NXM Handling](docs/NXM_HANDLING.md) | NXM protocol parsing and the bug fix |
+
+### Quality Assurance
+
+| Document | Description |
+|----------|-------------|
+| [Bug Verification Matrix](docs/BUG_VERIFICATION_MATRIX.md) | All original STL bugs and their status in STL-Next |
+| [Game Testing Guide](docs/GAME_TESTING_GUIDE.md) | Test procedures for target games (Stardew, Skyrim, FO4, CP77) |
+
+### Platform-Specific
+
+| Document | Description |
+|----------|-------------|
+| [NixOS Installation](docs/NIXOS_INSTALLATION.md) | Dedicated guide for NixOS users |
+| [Stardrop Integration](docs/STARDROP_INTEGRATION.md) | Stardrop mod manager research and plan |
+
+## 🔧 Development
+
+```bash
+# Enter development shell
+nix develop
+
+# Build debug
+zig build
+
+# Build release
+zig build -Doptimize=ReleaseFast
+
+# Run tests
+zig build test
+
+# Run specific test
+zig build test -- "nxm: collection url"
+```
+
+## 🤝 Contributing
+
+We welcome contributions! Priority areas:
+
+1. **Tinker modules** - Add tools like ReShade, vkBasalt
+2. **Tests** - Edge cases in `src/tests/edge_cases.zig`
+3. **Documentation** - Usage guides and examples
+4. **Bug reports** - Especially for mod manager issues
+
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for code structure.
+
 ## 📜 License
 
 MIT
@@ -201,3 +256,5 @@ MIT
 ---
 
 **Core Principle**: Performance-first. Sub-100ms overhead for any operation.
+
+**Why STL-Next?** Because bugs like [the NXM URL truncation](docs/NXM_HANDLING.md) shouldn't sit unfixed for 6+ months.
