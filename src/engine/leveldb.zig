@@ -47,22 +47,29 @@ pub const SteamCollections = struct {
 
     /// Initialize with the Steam config directory
     pub fn init(allocator: std.mem.Allocator, steam_path: []const u8) !Self {
-        const db_path = try std.fmt.allocPrint(
-            allocator,
-            "{s}/config/htmlcache/Local Storage/leveldb",
-            .{steam_path},
-        );
-
-        // Verify the database exists
-        std.fs.accessAbsolute(db_path, .{}) catch {
-            allocator.free(db_path);
-            return error.DatabaseNotFound;
+        // Try multiple possible paths (changed between Steam versions)
+        const paths = [_][]const u8{
+            "/config/htmlcache/Default/Local Storage/leveldb",
+            "/config/htmlcache/Local Storage/leveldb",
         };
+        
+        var db_path: ?[]const u8 = null;
+        for (paths) |suffix| {
+            const candidate = try std.fmt.allocPrint(allocator, "{s}{s}", .{steam_path, suffix});
+            std.fs.accessAbsolute(candidate, .{}) catch {
+                allocator.free(candidate);
+                continue;
+            };
+            db_path = candidate;
+            break;
+        }
+        
+        const final_path = db_path orelse return error.DatabaseNotFound;
 
         return Self{
             .allocator = allocator,
             .steam_id = null,
-            .db_path = db_path,
+            .db_path = final_path,
             .hidden_cache = std.AutoHashMap(u32, bool).init(allocator),
             .tags_cache = std.AutoHashMap(u32, []const []const u8).init(allocator),
         };
