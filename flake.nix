@@ -26,7 +26,7 @@
           shellHook = ''
             echo "╔══════════════════════════════════════════╗"
             echo "║      STL-Next Development Shell          ║"
-            echo "║           Phase 3: Tinker System         ║"
+            echo "║           Phase 4: IPC + Wait Requester         ║"
             echo "╠══════════════════════════════════════════╣"
             echo "║ zig version: $(zig version)             ║"
             echo "╚══════════════════════════════════════════╝"
@@ -37,7 +37,7 @@
             echo "  zig build test    Run unit tests"
             echo "  zig build release Build optimized release"
             echo ""
-            echo "Phase 3 Features:"
+            echo "Phase 4 Features:"
             echo "  ✓ Tinker module interface (plugin system)"
             echo "  ✓ MangoHud overlay support"
             echo "  ✓ Gamescope wrapper support"

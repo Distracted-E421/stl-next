@@ -25,12 +25,15 @@ const steam = @import("engine/steam.zig");
 const appinfo = @import("engine/appinfo.zig");
 const config = @import("core/config.zig");
 const launcher = @import("core/launcher.zig");
+const ipc = @import("ipc/mod.zig");
+const ui = @import("ui/mod.zig");
+const modding = @import("modding/mod.zig");
 
 pub const std_options = std.Options{
     .log_level = if (builtin.mode == .Debug) .debug else .info,
 };
 
-const VERSION = "0.3.0-alpha";
+const VERSION = "0.4.0-alpha";
 
 const Command = enum {
     run,
@@ -41,6 +44,9 @@ const Command = enum {
     configure,
     install,
     benchmark,
+    wait,       // Phase 4: Run wait requester
+    nxm,        // Phase 4: Handle NXM link
+    tui,        // Phase 4: Run TUI client
     version,
     help,
 };
@@ -110,6 +116,29 @@ pub fn main() !void {
         },
         .install => {
             std.log.info("Tool installation not yet implemented", .{});
+        },
+        .wait => {
+            if (args.len < 3) {
+                std.log.err("Usage: stl-next wait <AppID>", .{});
+                return;
+            }
+            const app_id = try std.fmt.parseInt(u32, args[2], 10);
+            try runWaitRequester(allocator, app_id);
+        },
+        .nxm => {
+            if (args.len < 3) {
+                std.log.err("Usage: stl-next nxm <nxm://...>", .{});
+                return;
+            }
+            try handleNxmLink(allocator, args[2]);
+        },
+        .tui => {
+            if (args.len < 3) {
+                std.log.err("Usage: stl-next tui <AppID>", .{});
+                return;
+            }
+            const app_id = try std.fmt.parseInt(u32, args[2], 10);
+            try runTuiClient(allocator, app_id);
         },
         .version => printVersion(),
         .help => printUsage(),
@@ -403,6 +432,9 @@ fn printUsage() void {
         \\  list-protons      List available Proton versions (JSON)
         \\  collections <ID>  Show collections for a game
         \\  benchmark         Run performance benchmarks
+        \\  wait <AppID>      Start wait requester daemon (Phase 4)
+        \\  tui <AppID>       Connect TUI client to daemon (Phase 4)
+        \\  nxm <url>         Handle NXM protocol link (Phase 4)
         \\  configure         Open configuration UI (WIP)
         \\  install <tool>    Install a tool (ReShade, MO2, etc.) (WIP)
         \\  version           Show version information
@@ -415,14 +447,87 @@ fn printUsage() void {
         \\  STL_CONFIG_DIR    Config directory (default: ~/.config/stl-next)
         \\  STL_LOG_LEVEL     Log level: debug, info, warn, error
         \\  STL_JSON_OUTPUT   Force JSON output for all commands
+        \\  STL_SKIP_WAIT     Skip wait requester (instant launch)
+        \\  STL_COUNTDOWN     Wait requester countdown seconds (default: 10)
         \\
         \\Examples:
         \\  stl-next 413150                    # Launch Stardew Valley
         \\  stl-next info 489830               # Show Skyrim SE info
         \\  stl-next list-games | jq '.[]'     # List games with jq
-        \\  stl-next benchmark                 # Run Phase 2 benchmarks
+        \\  stl-next wait 413150               # Start wait requester daemon
+        \\  stl-next tui 413150                # Connect TUI client
+        \\  stl-next nxm "nxm://..."           # Handle NXM link
         \\
     ) catch {};
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 4: WAIT REQUESTER & MOD MANAGER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+fn runWaitRequester(allocator: std.mem.Allocator, app_id: u32) !void {
+    std.log.info("╔════════════════════════════════════════════╗", .{});
+    std.log.info("║      STL-NEXT WAIT REQUESTER v{s}      ║", .{VERSION});
+    std.log.info("╚════════════════════════════════════════════╝", .{});
+
+    // Get game info
+    var steam_engine = try steam.SteamEngine.init(allocator);
+    defer steam_engine.deinit();
+
+    const game_info = try steam_engine.getGameInfo(app_id);
+    std.log.info("Game: {s}", .{game_info.name});
+
+    // Load config
+    var game_config = config.loadGameConfig(allocator, app_id) catch config.GameConfig.defaults(app_id);
+
+    // Start wait requester
+    var requester = try ui.WaitRequester.init(
+        allocator,
+        app_id,
+        game_info.name,
+        &game_config,
+    );
+    defer requester.deinit();
+
+    const should_launch = try requester.run();
+
+    if (should_launch) {
+        std.log.info("Launching game...", .{});
+        const result = try launcher.launch(allocator, &steam_engine, app_id, &.{}, false);
+        if (!result.success) {
+            if (result.error_msg) |msg| {
+                std.log.err("Launch failed: {s}", .{msg});
+            }
+        }
+    } else {
+        std.log.info("Launch aborted by user", .{});
+    }
+}
+
+fn runTuiClient(allocator: std.mem.Allocator, app_id: u32) !void {
+    // Get game info
+    var steam_engine = try steam.SteamEngine.init(allocator);
+    defer steam_engine.deinit();
+
+    const game_info = try steam_engine.getGameInfo(app_id);
+
+    // Run TUI
+    try ui.runTUI(allocator, app_id, game_info.name);
+}
+
+fn handleNxmLink(allocator: std.mem.Allocator, url: []const u8) !void {
+    std.log.info("NXM Handler: {s}", .{url});
+
+    // Parse the link
+    var link = try modding.NxmLink.parse(allocator, url);
+    defer link.deinit(allocator);
+
+    std.log.info("  Game: {s}", .{link.game_domain});
+    std.log.info("  Mod ID: {d}", .{link.mod_id});
+    std.log.info("  File ID: {d}", .{link.file_id});
+
+    // Would forward to mod manager here
+    std.log.info("NXM handling requires mod manager integration (MO2/Vortex)", .{});
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
