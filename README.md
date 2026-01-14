@@ -2,7 +2,31 @@
 
 A high-performance Steam game wrapper written in Zig, replacing the 21,000-line Bash script.
 
-## 🎯 Project Status
+## 🎯 Why This Fork Exists
+
+The original SteamTinkerLaunch has a **critical bug unfixed for 6+ months**:
+
+```bash
+# The Bug: Wine interprets "/" as command switches!
+# What STL sends to Vortex:
+nxm://stardewvalley/collections/tckf0m/revisions/100
+
+# What Vortex actually receives (TRUNCATED!):
+nxm://stardewvalley/collections/tckf0m
+# Error: "Invalid URL: invalid nxm url"
+```
+
+**STL-Next fixes this** with proper URL encoding:
+```bash
+$ ./stl-next nxm "nxm://stardewvalley/collections/tckf0m/revisions/100"
+  Parsed: Collection: stardewvalley/collections/tckf0m/revisions/100
+  Wine-safe: nxm://stardewvalley%2Fcollections%2Ftckf0m%2Frevisions%2F100
+  # /revisions/100 PRESERVED! ✅
+```
+
+See: [STL_URL_TRUNCATION_BUG_REPORT.md](../stardew-modding-nix/STL_URL_TRUNCATION_BUG_REPORT.md)
+
+## 📊 Project Status
 
 | Phase | Status | Description |
 |-------|--------|-------------|
@@ -135,6 +159,24 @@ src/
 | `STL_SKIP_WAIT` | Skip wait requester (instant launch) |
 | `STL_COUNTDOWN` | Countdown seconds (default: 10) |
 | `STL_CONFIG_DIR` | Config directory |
+
+## 🛡️ Error Handling (Hardened)
+
+Unlike the original Bash script, STL-Next has **comprehensive error handling**:
+
+| Category | Hardening |
+|----------|-----------|
+| **NXM URLs** | Validates scheme, domain, IDs; URL-encodes for Wine |
+| **IPC** | Retry logic, timeouts, connection recovery |
+| **Config** | JSON validation, size limits, graceful defaults |
+| **VDF** | Handles malformed files, missing fields |
+| **Memory** | Test allocator catches all leaks |
+
+Edge case tests in `src/tests/edge_cases.zig`:
+- Collection URL revision preservation (THE BUG FIX)
+- Special characters in mod names
+- Boundary conditions (max AppID, etc.)
+- Memory safety (allocation/deallocation loops)
 
 ## 📝 Known Limitations
 
