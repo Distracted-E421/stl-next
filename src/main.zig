@@ -160,7 +160,11 @@ fn runGame(allocator: std.mem.Allocator, app_id: u32, extra_args: []const []cons
     std.log.info("Setup completed in {d:.2}ms", .{@as(f64, @floatFromInt(setup_time)) / std.time.ns_per_ms});
 
     // For now, just pass through to Proton/the game
-    try launcher.launch(allocator, &steam_engine, app_id, extra_args);
+    const result = try launcher.launch(allocator, &steam_engine, app_id, extra_args, false);
+    if (!result.success) {
+        if (result.error_msg) |msg| std.log.err("Launch failed: {s}", .{msg});
+        return error.LaunchFailed;
+    }
 }
 
 fn showGameInfo(allocator: std.mem.Allocator, app_id: u32) !void {

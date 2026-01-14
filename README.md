@@ -7,141 +7,123 @@ A high-performance Steam game wrapper written in Zig, replacing the 21,000-line 
 | Phase | Status | Description |
 |-------|--------|-------------|
 | Phase 1 | ✅ Complete | Core CLI, VDF text parsing, basic Steam discovery |
-| Phase 2 | ✅ Complete | Binary VDF streaming, LevelDB collections, fast AppID seeking |
+| Phase 2 | ✅ Complete | Binary VDF streaming, fast AppID seeking |
 | Phase 3 | ✅ Complete | Tinker module system (MangoHud, Gamescope, GameMode) |
-| Phase 4 | 🚧 In Progress | GUI (Raylib), full game launch, mod manager integration |
+| Phase 3.5 | ✅ Complete | **Hardening**: Proper JSON, no global state, actual exec |
+| Phase 4 | 🚧 Next | GUI (Raylib), mod manager integration |
 
-## 🚀 Performance (Benchmarks)
+## 🔧 Phase 3.5 Hardening
+
+Phase 3.5 focused on production-readiness:
+
+| Issue | Before | After |
+|-------|--------|-------|
+| **JSON Parsing** | String searching (`indexOf`) | Proper `std.json` parsing |
+| **Global State** | Tinkers used global vars | Configs passed via `Context` |
+| **Game Launch** | Stub (`"not implemented"`) | Real `std.process.Child.spawn()` |
+| **Memory Safety** | Some leaks in debug | Proper defers and cleanup |
+
+## 🚀 Performance
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
 ║              STL-NEXT BENCHMARK                              ║
 ╚══════════════════════════════════════════════════════════════╝
 
-Steam Discovery:         0.10 ms
-Game Lookup (413150):    0.09 ms (Stardew Valley)
-List All Games:          2.72 ms (42 games)
-List Protons:            0.05 ms (12 versions)
+Steam Discovery:         0.13 ms
+Game Lookup (413150):    0.12 ms (Stardew Valley)
+List All Games:         10.26 ms (42 games)
+List Protons:            0.23 ms (12 versions)
 
-Target: All operations < 100ms ✓
+All operations < 100ms ✓
 ```
-
-Compare to original STL: **2-5 seconds** for similar operations.
 
 ## 📦 Installation
 
-### NixOS (Recommended)
 ```bash
+# NixOS
 git clone https://github.com/e421/stl-next
 cd stl-next
 nix develop
-
 zig build -Doptimize=ReleaseFast
+
+# Usage
 ./zig-out/bin/stl-next help
-```
-
-## 🔧 Usage
-
-```bash
-# Show help
-stl-next help
-
-# Launch a game (shorthand)
-stl-next 413150                    # Stardew Valley
-
-# Get game information (JSON)
-stl-next info 413150
-
-# List installed games
-stl-next list-games | jq '.[]'
-
-# List Proton versions
-stl-next list-protons
-
-# Run performance benchmark
-stl-next benchmark
+./zig-out/bin/stl-next 413150        # Launch Stardew Valley
+./zig-out/bin/stl-next info 413150   # Get game info (JSON)
+./zig-out/bin/stl-next benchmark     # Run performance test
 ```
 
 ## 🏗️ Architecture
 
 ```
-stl-next/
-├── src/
-│   ├── main.zig              # CLI entry point
-│   ├── core/
-│   │   ├── config.zig        # Game configuration management
-│   │   └── launcher.zig      # Launch orchestration
-│   ├── engine/
-│   │   ├── steam.zig         # Steam discovery & library management
-│   │   ├── vdf.zig           # Text VDF parser
-│   │   ├── appinfo.zig       # Binary VDF streaming parser
-│   │   └── leveldb.zig       # Steam collections (pure Zig)
-│   └── tinkers/              # Phase 3: Module System
-│       ├── mod.zig           # Module exports
-│       ├── interface.zig     # Tinker trait definition
-│       ├── mangohud.zig      # MangoHud overlay
-│       ├── gamescope.zig     # Gamescope wrapper
-│       └── gamemode.zig      # Feral GameMode
-├── build.zig
-├── flake.nix
-└── justfile
+src/
+├── main.zig              # CLI entry
+├── core/
+│   ├── config.zig        # JSON configs (std.json parsing)
+│   └── launcher.zig      # Launch pipeline (real exec!)
+├── engine/
+│   ├── steam.zig         # Steam discovery
+│   ├── vdf.zig           # VDF parsing
+│   └── appinfo.zig       # Binary VDF streaming
+└── tinkers/
+    ├── interface.zig     # Tinker trait (no global state)
+    ├── mangohud.zig      # MangoHud overlay
+    ├── gamescope.zig     # Compositor wrapper
+    └── gamemode.zig      # System optimizations
 ```
 
-## 🎮 Phase 3: Tinker Module System
+## 🎮 Tinker System
 
-The Tinker system provides a plugin architecture for game modifications:
+### Config via Context (No Global State)
 
-### Available Tinkers
+```zig
+// Old (bad): Global variables
+var global_config: Config = .{};
+pub fn setConfig(c: Config) void { global_config = c; }
 
-| Tinker | Priority | Function |
-|--------|----------|----------|
-| **GameMode** | 40 (OVERLAY_EARLY) | CPU governor, I/O priority |
-| **MangoHud** | 50 (OVERLAY) | Performance overlay HUD |
-| **Gamescope** | 80 (WRAPPER) | Micro-compositor, FSR upscaling |
+// New (good): Config passed through Context
+fn isEnabled(ctx: *const Context) bool {
+    return ctx.game_config.mangohud.enabled;
+}
+```
 
-### Tinker Lifecycle
-
-1. **preparePrefix**: Filesystem operations (symlinks, file copies)
-2. **modifyEnv**: Environment variable injection
-3. **modifyArgs**: Command line modifications
-
-### Per-Game Configuration
+### Per-Game JSON Config
 
 ```json
 // ~/.config/stl-next/games/413150.json
 {
   "app_id": 413150,
-  "mangohud": {
-    "enabled": true,
-    "show_fps": true,
-    "position": "top_right"
-  },
-  "gamescope": {
-    "enabled": true,
-    "width": 1920,
-    "height": 1080,
-    "fsr": true
-  },
-  "gamemode": {
-    "enabled": true
-  }
+  "mangohud": { "enabled": true, "show_fps": true },
+  "gamescope": { "enabled": true, "width": 1920 },
+  "gamemode": { "enabled": true }
 }
 ```
+
+## 🚨 Known Limitations
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| LevelDB Parsing | ❌ Stub | Returns empty data (needs real implementation) |
+| Executable Detection | ❌ Basic | Doesn't parse launch options from Steam |
+| VR Support | ❌ Not started | UEVR, SideQuest planned for Phase 4 |
+| GUI | ❌ Not started | Raylib-based, planned for Phase 4 |
 
 ## 🔜 Phase 4 Roadmap
 
 - [ ] Raylib-based Wait-Requester GUI
 - [ ] IPC daemon/client architecture
-- [ ] Full game launch (exec)
-- [ ] MO2/Vortex integration
+- [ ] MO2/Vortex integration (USVFS)
+- [ ] Real LevelDB parsing
+- [ ] Steam launch options parsing
 - [ ] ReShade with hash-based updates
 
 ## 📜 License
 
-MIT - See LICENSE file
+MIT
 
 ## 🙏 Acknowledgments
 
-- Original [SteamTinkerLaunch](https://github.com/sonic2kk/steamtinkerlaunch) by frostworx
+- Original [SteamTinkerLaunch](https://github.com/sonic2kk/steamtinkerlaunch)
 - Valve for Steam on Linux
 - The Zig community
