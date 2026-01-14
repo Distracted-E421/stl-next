@@ -3,15 +3,7 @@ const ipc = @import("../ipc/mod.zig");
 const config = @import("../core/config.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// WAIT REQUESTER DAEMON (Phase 4)
-// ═══════════════════════════════════════════════════════════════════════════════
-//
-// The daemon that:
-// 1. Shows pre-launch countdown
-// 2. Accepts IPC commands from GUI/TUI clients
-// 3. Manages tinker configuration
-// 4. Triggers the actual game launch
-//
+// WAIT REQUESTER DAEMON (Phase 4 - Refined)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 pub const WaitRequester = struct {
@@ -19,7 +11,6 @@ pub const WaitRequester = struct {
     server: ipc.Server,
     game_config: *config.GameConfig,
     countdown_seconds: u8,
-    auto_launch: bool,
     result: Result,
 
     const Self = @This();
@@ -41,8 +32,7 @@ pub const WaitRequester = struct {
             .allocator = allocator,
             .server = try ipc.Server.init(allocator, app_id, game_name),
             .game_config = game_config,
-            .countdown_seconds = 10, // Default countdown
-            .auto_launch = true,
+            .countdown_seconds = 10,
             .result = .PENDING,
         };
 
@@ -56,6 +46,13 @@ pub const WaitRequester = struct {
             requester.result = .LAUNCH;
             return requester;
         }
+        
+        // Load initial tinker states from config
+        requester.server.loadTinkerStates(
+            game_config.mangohud.enabled,
+            game_config.gamescope.enabled,
+            game_config.gamemode.enabled,
+        );
 
         return requester;
     }
@@ -67,7 +64,6 @@ pub const WaitRequester = struct {
     /// Run the wait requester loop
     /// Returns true if game should launch, false if aborted
     pub fn run(self: *Self) !bool {
-        // If already decided, skip
         if (self.result != .PENDING) {
             return self.result == .LAUNCH;
         }
@@ -75,7 +71,8 @@ pub const WaitRequester = struct {
         try self.server.start();
 
         std.log.info("Wait Requester: Starting countdown ({d}s)", .{self.countdown_seconds});
-        std.log.info("Wait Requester: Connect client to {s}", .{self.server.socket_path});
+        std.log.info("Wait Requester: Socket at {s}", .{self.server.socket_path});
+        std.log.info("Wait Requester: Connect TUI with: stl-next tui {d}", .{self.server.app_id});
 
         self.server.countdown = self.countdown_seconds;
         self.server.state = .COUNTDOWN;
@@ -108,41 +105,41 @@ pub const WaitRequester = struct {
                     self.server.countdown = @intCast(self.countdown_seconds - elapsed_seconds);
                     std.log.info("Wait Requester: {d}s remaining", .{self.server.countdown});
                 } else {
-                    // Countdown complete
                     self.server.state = .LAUNCHING;
                     self.result = .LAUNCH;
-                    std.log.info("Wait Requester: Countdown complete, launching", .{});
+                    std.log.info("Wait Requester: Countdown complete", .{});
                 }
             }
 
-            // Small sleep to prevent busy-waiting
             std.time.sleep(50 * std.time.ns_per_ms);
         }
+        
+        // Update config with final tinker states
+        const states = self.server.getTinkerStates();
+        self.game_config.mangohud.enabled = states.mangohud;
+        self.game_config.gamescope.enabled = states.gamescope;
+        self.game_config.gamemode.enabled = states.gamemode;
+        
+        // Save updated config
+        config.saveGameConfig(self.allocator, self.game_config) catch |err| {
+            std.log.warn("Failed to save config: {}", .{err});
+        };
 
         self.server.stop();
-
         return self.result == .LAUNCH;
     }
 
-    /// Skip the wait and launch immediately
     pub fn skipWait(self: *Self) void {
         self.result = .LAUNCH;
     }
 
-    /// Abort the launch
     pub fn abort(self: *Self) void {
         self.result = .ABORT;
     }
 };
 
-/// Quick check if wait should be shown (checks env vars)
 pub fn shouldShowWait() bool {
-    // Skip if STL_SKIP_WAIT is set
     if (std.posix.getenv("STL_SKIP_WAIT")) |_| return false;
-    
-    // Skip if not a TTY
-    // if (!std.io.getStdIn().isTty()) return false;
-    
     return true;
 }
 
@@ -162,3 +159,21 @@ test "wait requester init" {
     try std.testing.expectEqual(WaitRequester.Result.PENDING, requester.result);
 }
 
+test "wait requester loads tinker states" {
+    var game_config = config.GameConfig.defaults(413150);
+    game_config.mangohud.enabled = true;
+    game_config.gamemode.enabled = true;
+    
+    var requester = try WaitRequester.init(
+        std.testing.allocator,
+        413150,
+        "Test Game",
+        &game_config,
+    );
+    defer requester.deinit();
+    
+    const states = requester.server.getTinkerStates();
+    try std.testing.expect(states.mangohud);
+    try std.testing.expect(states.gamemode);
+    try std.testing.expect(!states.gamescope);
+}

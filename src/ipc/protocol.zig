@@ -1,107 +1,243 @@
 const std = @import("std");
-const json = std.json;
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// IPC PROTOCOL (Phase 4)
+// IPC PROTOCOL (Phase 4 - Refined)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// JSON-based protocol over Unix Domain Sockets
-// Communication between STL Launcher (Daemon) and GUI (Client)
+// Clean JSON-based protocol over Unix Domain Sockets
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Actions the client can send to the daemon
 pub const Action = enum {
-    PAUSE_LAUNCH,      // Pause the countdown timer
-    RESUME_LAUNCH,     // Resume countdown
-    UPDATE_CONFIG,     // Send new configuration
-    PROCEED,           // Launch the game immediately
-    ABORT,             // Cancel launch entirely
-    GET_STATUS,        // Request current status
-    GET_GAME_INFO,     // Request game information
-    GET_TINKERS,       // List available tinkers
-    TOGGLE_TINKER,     // Enable/disable a tinker
+    PAUSE_LAUNCH,
+    RESUME_LAUNCH,
+    UPDATE_CONFIG,
+    PROCEED,
+    ABORT,
+    GET_STATUS,
+    GET_GAME_INFO,
+    GET_TINKERS,
+    TOGGLE_TINKER,
+    
+    pub fn toString(self: Action) []const u8 {
+        return switch (self) {
+            .PAUSE_LAUNCH => "PAUSE_LAUNCH",
+            .RESUME_LAUNCH => "RESUME_LAUNCH",
+            .UPDATE_CONFIG => "UPDATE_CONFIG",
+            .PROCEED => "PROCEED",
+            .ABORT => "ABORT",
+            .GET_STATUS => "GET_STATUS",
+            .GET_GAME_INFO => "GET_GAME_INFO",
+            .GET_TINKERS => "GET_TINKERS",
+            .TOGGLE_TINKER => "TOGGLE_TINKER",
+        };
+    }
+    
+    pub fn fromString(s: []const u8) ?Action {
+        const actions = [_]struct { name: []const u8, action: Action }{
+            .{ .name = "PAUSE_LAUNCH", .action = .PAUSE_LAUNCH },
+            .{ .name = "RESUME_LAUNCH", .action = .RESUME_LAUNCH },
+            .{ .name = "UPDATE_CONFIG", .action = .UPDATE_CONFIG },
+            .{ .name = "PROCEED", .action = .PROCEED },
+            .{ .name = "ABORT", .action = .ABORT },
+            .{ .name = "GET_STATUS", .action = .GET_STATUS },
+            .{ .name = "GET_GAME_INFO", .action = .GET_GAME_INFO },
+            .{ .name = "GET_TINKERS", .action = .GET_TINKERS },
+            .{ .name = "TOGGLE_TINKER", .action = .TOGGLE_TINKER },
+        };
+        for (actions) |a| {
+            if (std.mem.eql(u8, s, a.name) or std.mem.indexOf(u8, s, a.name) != null) {
+                return a.action;
+            }
+        }
+        return null;
+    }
 };
 
 /// Daemon states
 pub const DaemonState = enum {
     INITIALIZING,
-    WAITING,           // Showing GUI/waiting for user
-    COUNTDOWN,         // Countdown to auto-launch
-    LAUNCHING,         // Preparing to launch
-    RUNNING,           // Game is running
-    FINISHED,          // Game exited
+    WAITING,
+    COUNTDOWN,
+    LAUNCHING,
+    RUNNING,
+    FINISHED,
     ERROR,
+    
+    pub fn toString(self: DaemonState) []const u8 {
+        return switch (self) {
+            .INITIALIZING => "INITIALIZING",
+            .WAITING => "WAITING",
+            .COUNTDOWN => "COUNTDOWN",
+            .LAUNCHING => "LAUNCHING",
+            .RUNNING => "RUNNING",
+            .FINISHED => "FINISHED",
+            .ERROR => "ERROR",
+        };
+    }
+    
+    pub fn fromString(s: []const u8) DaemonState {
+        if (std.mem.indexOf(u8, s, "WAITING") != null) return .WAITING;
+        if (std.mem.indexOf(u8, s, "COUNTDOWN") != null) return .COUNTDOWN;
+        if (std.mem.indexOf(u8, s, "LAUNCHING") != null) return .LAUNCHING;
+        if (std.mem.indexOf(u8, s, "RUNNING") != null) return .RUNNING;
+        if (std.mem.indexOf(u8, s, "FINISHED") != null) return .FINISHED;
+        if (std.mem.indexOf(u8, s, "ERROR") != null) return .ERROR;
+        return .INITIALIZING;
+    }
 };
 
 /// Message from Client to Daemon
 pub const ClientMessage = struct {
     action: Action,
-    payload: ?[]const u8 = null, // JSON payload for complex actions
+    tinker_id: ?[]const u8 = null,
+    enabled: ?bool = null,
     
     pub fn serialize(self: *const ClientMessage, allocator: std.mem.Allocator) ![]u8 {
-        return try json.stringifyAlloc(allocator, self, .{});
-    }
-    
-    pub fn deserialize(allocator: std.mem.Allocator, data: []const u8) !ClientMessage {
-        return try json.parseFromSlice(ClientMessage, allocator, data, .{});
+        var buf = std.ArrayList(u8).init(allocator);
+        errdefer buf.deinit();
+        
+        try buf.appendSlice("{\"action\":\"");
+        try buf.appendSlice(self.action.toString());
+        try buf.appendSlice("\"");
+        
+        if (self.tinker_id) |tid| {
+            try buf.appendSlice(",\"tinker_id\":\"");
+            try buf.appendSlice(tid);
+            try buf.appendSlice("\"");
+        }
+        
+        if (self.enabled) |e| {
+            try buf.appendSlice(",\"enabled\":");
+            try buf.appendSlice(if (e) "true" else "false");
+        }
+        
+        try buf.appendSlice("}");
+        return buf.toOwnedSlice();
     }
 };
 
 /// Message from Daemon to Client
 pub const DaemonMessage = struct {
-    state: DaemonState,
+    state: DaemonState = .INITIALIZING,
     countdown_seconds: u8 = 0,
     game_name: []const u8 = "",
     app_id: u32 = 0,
     error_msg: ?[]const u8 = null,
-    tinkers_enabled: []const []const u8 = &.{},
+    
+    // Tinker states
+    mangohud_enabled: bool = false,
+    gamescope_enabled: bool = false,
+    gamemode_enabled: bool = false,
     
     pub fn serialize(self: *const DaemonMessage, allocator: std.mem.Allocator) ![]u8 {
-        return try json.stringifyAlloc(allocator, self, .{});
+        var buf = std.ArrayList(u8).init(allocator);
+        errdefer buf.deinit();
+        
+        try buf.appendSlice("{");
+        
+        // State
+        try buf.appendSlice("\"state\":\"");
+        try buf.appendSlice(self.state.toString());
+        try buf.appendSlice("\",");
+        
+        // Countdown
+        try buf.appendSlice("\"countdown_seconds\":");
+        var num_buf: [8]u8 = undefined;
+        const num_str = std.fmt.bufPrint(&num_buf, "{d}", .{self.countdown_seconds}) catch "0";
+        try buf.appendSlice(num_str);
+        try buf.appendSlice(",");
+        
+        // Game name (escape quotes)
+        try buf.appendSlice("\"game_name\":\"");
+        for (self.game_name) |c| {
+            if (c == '"') {
+                try buf.appendSlice("\\\"");
+            } else if (c == '\\') {
+                try buf.appendSlice("\\\\");
+            } else {
+                try buf.append(c);
+            }
+        }
+        try buf.appendSlice("\",");
+        
+        // App ID
+        try buf.appendSlice("\"app_id\":");
+        const app_str = std.fmt.bufPrint(&num_buf, "{d}", .{self.app_id}) catch "0";
+        try buf.appendSlice(app_str);
+        try buf.appendSlice(",");
+        
+        // Tinker states
+        try buf.appendSlice("\"mangohud_enabled\":");
+        try buf.appendSlice(if (self.mangohud_enabled) "true" else "false");
+        try buf.appendSlice(",");
+        
+        try buf.appendSlice("\"gamescope_enabled\":");
+        try buf.appendSlice(if (self.gamescope_enabled) "true" else "false");
+        try buf.appendSlice(",");
+        
+        try buf.appendSlice("\"gamemode_enabled\":");
+        try buf.appendSlice(if (self.gamemode_enabled) "true" else "false");
+        
+        // Error (optional)
+        if (self.error_msg) |err| {
+            try buf.appendSlice(",\"error_msg\":\"");
+            try buf.appendSlice(err);
+            try buf.appendSlice("\"");
+        }
+        
+        try buf.appendSlice("}");
+        return buf.toOwnedSlice();
     }
-};
-
-/// Tinker toggle request
-pub const TinkerToggle = struct {
-    tinker_id: []const u8,
-    enabled: bool,
-};
-
-/// Config update payload
-pub const ConfigUpdate = struct {
-    mangohud_enabled: ?bool = null,
-    gamescope_enabled: ?bool = null,
-    gamemode_enabled: ?bool = null,
-    proton_version: ?[]const u8 = null,
+    
+    pub fn parseFromJson(allocator: std.mem.Allocator, data: []const u8) !DaemonMessage {
+        _ = allocator;
+        var msg = DaemonMessage{};
+        
+        // Parse state
+        msg.state = DaemonState.fromString(data);
+        
+        // Parse countdown_seconds
+        if (std.mem.indexOf(u8, data, "\"countdown_seconds\":")) |pos| {
+            const start = pos + 20;
+            if (start < data.len) {
+                var end = start;
+                while (end < data.len and data[end] >= '0' and data[end] <= '9') : (end += 1) {}
+                if (end > start) {
+                    msg.countdown_seconds = std.fmt.parseInt(u8, data[start..end], 10) catch 0;
+                }
+            }
+        }
+        
+        // Parse app_id
+        if (std.mem.indexOf(u8, data, "\"app_id\":")) |pos| {
+            const start = pos + 9;
+            if (start < data.len) {
+                var end = start;
+                while (end < data.len and data[end] >= '0' and data[end] <= '9') : (end += 1) {}
+                if (end > start) {
+                    msg.app_id = std.fmt.parseInt(u32, data[start..end], 10) catch 0;
+                }
+            }
+        }
+        
+        // Parse booleans
+        msg.mangohud_enabled = std.mem.indexOf(u8, data, "\"mangohud_enabled\":true") != null;
+        msg.gamescope_enabled = std.mem.indexOf(u8, data, "\"gamescope_enabled\":true") != null;
+        msg.gamemode_enabled = std.mem.indexOf(u8, data, "\"gamemode_enabled\":true") != null;
+        
+        return msg;
+    }
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SOCKET PATH HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Get the socket path for a given AppID
 pub fn getSocketPath(allocator: std.mem.Allocator, app_id: u32) ![]const u8 {
-    // Use XDG_RUNTIME_DIR if available, otherwise /tmp
     const runtime_dir = std.posix.getenv("XDG_RUNTIME_DIR") orelse "/tmp";
     return std.fmt.allocPrint(allocator, "{s}/stl-next-{d}.sock", .{ runtime_dir, app_id });
-}
-
-/// Create a simple status response
-pub fn statusResponse(
-    allocator: std.mem.Allocator,
-    state: DaemonState,
-    game_name: []const u8,
-    app_id: u32,
-    countdown: u8,
-) ![]u8 {
-    const msg = DaemonMessage{
-        .state = state,
-        .countdown_seconds = countdown,
-        .game_name = game_name,
-        .app_id = app_id,
-    };
-    return msg.serialize(allocator);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -121,3 +257,34 @@ test "client message serialization" {
     try std.testing.expect(std.mem.indexOf(u8, serialized, "PAUSE_LAUNCH") != null);
 }
 
+test "daemon message serialization" {
+    const msg = DaemonMessage{
+        .state = .COUNTDOWN,
+        .countdown_seconds = 5,
+        .game_name = "Test Game",
+        .app_id = 12345,
+        .mangohud_enabled = true,
+    };
+    const serialized = try msg.serialize(std.testing.allocator);
+    defer std.testing.allocator.free(serialized);
+    
+    try std.testing.expect(std.mem.indexOf(u8, serialized, "COUNTDOWN") != null);
+    try std.testing.expect(std.mem.indexOf(u8, serialized, "Test Game") != null);
+    try std.testing.expect(std.mem.indexOf(u8, serialized, "12345") != null);
+    try std.testing.expect(std.mem.indexOf(u8, serialized, "\"mangohud_enabled\":true") != null);
+}
+
+test "daemon message parsing" {
+    const json = "{\"state\":\"COUNTDOWN\",\"countdown_seconds\":7,\"app_id\":413150,\"mangohud_enabled\":true}";
+    const msg = try DaemonMessage.parseFromJson(std.testing.allocator, json);
+    
+    try std.testing.expectEqual(DaemonState.COUNTDOWN, msg.state);
+    try std.testing.expectEqual(@as(u8, 7), msg.countdown_seconds);
+    try std.testing.expectEqual(@as(u32, 413150), msg.app_id);
+    try std.testing.expect(msg.mangohud_enabled);
+}
+
+test "action fromString" {
+    try std.testing.expectEqual(Action.PAUSE_LAUNCH, Action.fromString("PAUSE_LAUNCH").?);
+    try std.testing.expectEqual(Action.PROCEED, Action.fromString("{\"action\":\"PROCEED\"}").?);
+}
