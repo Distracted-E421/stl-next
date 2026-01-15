@@ -5,6 +5,30 @@ const ray = @cImport({
 const ipc = @import("ipc.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// WAYLAND WORKAROUND
+// ═══════════════════════════════════════════════════════════════════════════════
+// Raylib/GLFW has known HiDPI mouse coordinate issues on Wayland.
+// See: https://github.com/raysan5/raylib/issues/3872
+//
+// Workaround options:
+// 1. Set GDK_BACKEND=x11 before launching
+// 2. Set DISPLAY= (unset) to force native Wayland without XWayland
+// 3. Use FLAG_WINDOW_HIGHDPI and manually scale
+//
+// We'll try to detect and warn the user.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+fn checkWaylandWarning() void {
+    if (std.posix.getenv("WAYLAND_DISPLAY")) |_| {
+        if (std.posix.getenv("GDK_BACKEND") == null) {
+            std.log.warn("Running on Wayland without GDK_BACKEND=x11", .{});
+            std.log.warn("Mouse coordinates may be incorrect on HiDPI displays", .{});
+            std.log.warn("Try: GDK_BACKEND=x11 stl-next-gui ... for better compatibility", .{});
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // STL-NEXT GUI: WAIT REQUESTER v2
 // ═══════════════════════════════════════════════════════════════════════════════
 //
@@ -148,6 +172,9 @@ fn getHeight() i32 {
 }
 
 pub fn main() !void {
+    // Check for Wayland mouse coordinate issues
+    checkWaylandWarning();
+
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
@@ -193,7 +220,7 @@ pub fn main() !void {
     const monitor = ray.GetCurrentMonitor();
     const mon_width = ray.GetMonitorWidth(monitor);
     const mon_height = ray.GetMonitorHeight(monitor);
-    
+
     // Try to center window (may not work on Wayland)
     ray.SetWindowPosition(
         @divTrunc(mon_width - DEFAULT_WIDTH, 2),

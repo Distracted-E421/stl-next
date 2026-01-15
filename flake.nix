@@ -59,7 +59,7 @@
       # Main package
       packages.default = pkgs.stdenv.mkDerivation {
         pname = "stl-next";
-        version = "0.5.3-alpha";
+        version = "0.5.5-alpha";
         src = self;
 
         nativeBuildInputs = [zig];
@@ -92,7 +92,7 @@
       # GUI package (with Raylib)
       packages.gui = pkgs.stdenv.mkDerivation {
         pname = "stl-next-gui";
-        version = "0.5.3-alpha";
+        version = "0.5.5-alpha";
         src = self;
 
         nativeBuildInputs = [zig];

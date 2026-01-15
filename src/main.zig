@@ -26,6 +26,7 @@ const launcher = @import("core/launcher.zig");
 const ipc = @import("ipc/mod.zig");
 const ui = @import("ui/mod.zig");
 const modding = @import("modding/mod.zig");
+const nexusmods = @import("api/nexusmods.zig");
 
 pub const std_options = std.Options{
     .log_level = if (builtin.mode == .Debug) .debug else .info,
@@ -51,6 +52,15 @@ const Command = enum {
     import_heroic,
     artwork,
     search_game,
+    // Nexus Mods commands
+    nexus,
+    nexus_login,
+    nexus_whoami,
+    nexus_mod,
+    nexus_files,
+    nexus_download,
+    nexus_track,
+    nexus_tracked,
     version,
     help,
 };
@@ -172,6 +182,46 @@ pub fn main() !void {
             }
             try searchSteamGridDB(allocator, args[2]);
         },
+        // Nexus Mods commands
+        .nexus => printNexusHelp(),
+        .nexus_login => try nexusLogin(allocator, if (args.len > 2) args[2] else null),
+        .nexus_whoami => try nexusWhoami(allocator),
+        .nexus_mod => {
+            if (args.len < 4) {
+                std.log.err("Usage: stl-next nexus-mod <game_domain> <mod_id>", .{});
+                std.log.err("Example: stl-next nexus-mod stardewvalley 21297", .{});
+                return;
+            }
+            const mod_id = try std.fmt.parseInt(u64, args[3], 10);
+            try nexusModInfo(allocator, args[2], mod_id);
+        },
+        .nexus_files => {
+            if (args.len < 4) {
+                std.log.err("Usage: stl-next nexus-files <game_domain> <mod_id>", .{});
+                return;
+            }
+            const mod_id = try std.fmt.parseInt(u64, args[3], 10);
+            try nexusModFiles(allocator, args[2], mod_id);
+        },
+        .nexus_download => {
+            if (args.len < 5) {
+                std.log.err("Usage: stl-next nexus-download <game_domain> <mod_id> <file_id>", .{});
+                std.log.err("Note: Requires Nexus Premium for direct download", .{});
+                return;
+            }
+            const mod_id = try std.fmt.parseInt(u64, args[3], 10);
+            const file_id = try std.fmt.parseInt(u64, args[4], 10);
+            try nexusDownload(allocator, args[2], mod_id, file_id);
+        },
+        .nexus_track => {
+            if (args.len < 4) {
+                std.log.err("Usage: stl-next nexus-track <game_domain> <mod_id>", .{});
+                return;
+            }
+            const mod_id = try std.fmt.parseInt(u64, args[3], 10);
+            try nexusTrackMod(allocator, args[2], mod_id);
+        },
+        .nexus_tracked => try nexusTrackedMods(allocator),
         .version => printVersion(),
         .help => printUsage(),
     }
@@ -492,6 +542,16 @@ fn printUsage() void {
         \\  artwork <AppID>       Fetch artwork for a Steam game
         \\  search-game <name>    Search SteamGridDB for a game
         \\
+        \\Nexus Mods (requires API key):
+        \\  nexus                 Show Nexus Mods help
+        \\  nexus-login [key]     Save API key (or enter interactively)
+        \\  nexus-whoami          Show current Nexus user info
+        \\  nexus-mod <game> <id> Show mod information
+        \\  nexus-files <game> <mod_id>  List files for a mod
+        \\  nexus-download <game> <mod_id> <file_id>  Get download link
+        \\  nexus-track <game> <mod_id>  Track a mod for updates
+        \\  nexus-tracked         List all tracked mods
+        \\
         \\Configuration:
         \\  configure             Open configuration UI (WIP)
         \\  install <tool>        Install a tool (ReShade, MO2, etc.) (WIP)
@@ -505,6 +565,7 @@ fn printUsage() void {
         \\  STL_SKIP_WAIT         Skip wait requester (instant launch)
         \\  STL_COUNTDOWN         Wait requester countdown seconds (default: 10)
         \\  STEAMGRIDDB_API_KEY   API key for SteamGridDB (free at steamgriddb.com)
+        \\  STL_NEXUS_API_KEY     Nexus Mods API key (get from nexusmods.com)
         \\
         \\Examples:
         \\  stl-next 413150                    # Launch Stardew Valley
@@ -514,6 +575,333 @@ fn printUsage() void {
         \\  stl-next artwork 413150            # Get Stardew Valley artwork
         \\
     , .{});
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEXUS MODS COMMANDS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+fn printNexusHelp() void {
+    compat.print(
+        \\Nexus Mods Integration
+        \\======================
+        \\
+        \\First, get your API key from:
+        \\  https://www.nexusmods.com/users/myaccount?tab=api%20access
+        \\
+        \\Then save it:
+        \\  stl-next nexus-login YOUR_API_KEY
+        \\
+        \\Or set environment variable:
+        \\  export STL_NEXUS_API_KEY=YOUR_API_KEY
+        \\
+        \\Commands:
+        \\  nexus-whoami               Check API key and show user info
+        \\  nexus-mod <game> <mod_id>  Get mod details
+        \\  nexus-files <game> <mod_id>  List available files
+        \\  nexus-download <game> <mod_id> <file_id>  Get download link (Premium)
+        \\  nexus-track <game> <mod_id>  Track mod for updates
+        \\  nexus-tracked              List tracked mods
+        \\
+        \\Game Domains (examples):
+        \\  stardewvalley, skyrimspecialedition, fallout4, cyberpunk2077
+        \\
+        \\Rate Limits:
+        \\  2,500 requests per day, 100 per hour after daily limit
+        \\
+        \\Premium Features:
+        \\  Direct download links (no browser needed)
+        \\  Faster download speeds from Nexus CDN
+        \\
+    , .{});
+}
+
+fn nexusLogin(allocator: std.mem.Allocator, key_arg: ?[]const u8) !void {
+    var api_key: []const u8 = undefined;
+    var key_owned = false;
+
+    if (key_arg) |k| {
+        api_key = k;
+    } else {
+        // Interactive input
+        compat.print("Enter your Nexus Mods API key: ", .{});
+        
+        var buf: [256]u8 = undefined;
+        const stdin_file = compat.stdin();
+        const bytes_read = stdin_file.readAll(&buf) catch {
+            std.log.err("Failed to read input", .{});
+            return;
+        };
+        
+        if (bytes_read == 0) {
+            std.log.err("No API key provided", .{});
+            return;
+        }
+        
+        // Trim newlines
+        var end = bytes_read;
+        while (end > 0 and (buf[end - 1] == '\n' or buf[end - 1] == '\r')) {
+            end -= 1;
+        }
+        api_key = buf[0..end];
+        key_owned = false;
+    }
+
+    // Validate the key
+    var client = nexusmods.NexusClient.init(allocator);
+    defer client.deinit();
+    try client.setApiKey(api_key);
+
+    compat.print("Validating API key...\n", .{});
+    
+    const user = client.validateKey() catch |err| {
+        switch (err) {
+            error.InvalidApiKey => std.log.err("Invalid API key", .{}),
+            error.RateLimited => std.log.err("Rate limited - try again later", .{}),
+            error.NetworkError => std.log.err("Network error - check your connection", .{}),
+            else => std.log.err("Error validating key: {}", .{err}),
+        }
+        return;
+    };
+    defer {
+        var u = user;
+        u.deinit(allocator);
+    }
+
+    // Save the key
+    nexusmods.saveApiKey(allocator, api_key) catch |err| {
+        std.log.warn("Could not save API key: {}", .{err});
+    };
+
+    compat.print("\n✓ API key validated and saved!\n", .{});
+    compat.print("  User: {s}\n", .{user.name});
+    compat.print("  Premium: {s}\n", .{if (user.is_premium) "Yes" else "No"});
+    compat.print("  Supporter: {s}\n", .{if (user.is_supporter) "Yes" else "No"});
+}
+
+fn nexusWhoami(allocator: std.mem.Allocator) !void {
+    var client = nexusmods.NexusClient.init(allocator);
+    defer client.deinit();
+
+    client.discoverApiKey() catch {
+        std.log.err("No API key found. Run: stl-next nexus-login YOUR_API_KEY", .{});
+        return;
+    };
+
+    const user = client.validateKey() catch |err| {
+        switch (err) {
+            error.InvalidApiKey => std.log.err("API key is invalid or expired", .{}),
+            error.RateLimited => std.log.err("Rate limited - try again later", .{}),
+            error.NetworkError => std.log.err("Network error - check your connection", .{}),
+            else => std.log.err("Error: {}", .{err}),
+        }
+        return;
+    };
+    defer {
+        var u = user;
+        u.deinit(allocator);
+    }
+
+    compat.print("\n╔════════════════════════════════════════════╗\n", .{});
+    compat.print("║           NEXUS MODS USER                  ║\n", .{});
+    compat.print("╠════════════════════════════════════════════╣\n", .{});
+    compat.print("║ Name:      {s: <30} ║\n", .{user.name[0..@min(30, user.name.len)]});
+    compat.print("║ User ID:   {d: <30} ║\n", .{user.user_id});
+    compat.print("║ Premium:   {s: <30} ║\n", .{if (user.is_premium) "✓ Yes" else "✗ No"});
+    compat.print("║ Supporter: {s: <30} ║\n", .{if (user.is_supporter) "✓ Yes" else "✗ No"});
+    compat.print("╚════════════════════════════════════════════╝\n", .{});
+}
+
+fn nexusModInfo(allocator: std.mem.Allocator, game_domain: []const u8, mod_id: u64) !void {
+    var client = nexusmods.NexusClient.init(allocator);
+    defer client.deinit();
+
+    client.discoverApiKey() catch {
+        std.log.err("No API key found. Run: stl-next nexus-login YOUR_API_KEY", .{});
+        return;
+    };
+
+    const mod = client.getMod(game_domain, mod_id) catch |err| {
+        switch (err) {
+            error.ModNotFound => std.log.err("Mod {d} not found in {s}", .{ mod_id, game_domain }),
+            error.InvalidApiKey => std.log.err("API key is invalid", .{}),
+            else => std.log.err("Error: {}", .{err}),
+        }
+        return;
+    };
+    defer {
+        var m = mod;
+        m.deinit(allocator);
+    }
+
+    compat.print("\n╔════════════════════════════════════════════════════════╗\n", .{});
+    compat.print("║ MOD: {s: <51} ║\n", .{mod.name[0..@min(51, mod.name.len)]});
+    compat.print("╠════════════════════════════════════════════════════════╣\n", .{});
+    compat.print("║ ID:       {d: <45} ║\n", .{mod.mod_id});
+    compat.print("║ Version:  {s: <45} ║\n", .{mod.version[0..@min(45, mod.version.len)]});
+    compat.print("║ Author:   {s: <45} ║\n", .{mod.author[0..@min(45, mod.author.len)]});
+    compat.print("║ Endorse:  {d: <45} ║\n", .{mod.endorsement_count});
+    compat.print("╠════════════════════════════════════════════════════════╣\n", .{});
+    compat.print("║ Summary:                                               ║\n", .{});
+    
+    // Print summary wrapped
+    var summary = mod.summary;
+    while (summary.len > 54) {
+        compat.print("║ {s: <54} ║\n", .{summary[0..54]});
+        summary = summary[54..];
+    }
+    if (summary.len > 0) {
+        compat.print("║ {s: <54} ║\n", .{summary});
+    }
+    
+    compat.print("╚════════════════════════════════════════════════════════╝\n", .{});
+}
+
+fn nexusModFiles(allocator: std.mem.Allocator, game_domain: []const u8, mod_id: u64) !void {
+    var client = nexusmods.NexusClient.init(allocator);
+    defer client.deinit();
+
+    client.discoverApiKey() catch {
+        std.log.err("No API key found. Run: stl-next nexus-login YOUR_API_KEY", .{});
+        return;
+    };
+
+    const files = client.getModFiles(game_domain, mod_id) catch |err| {
+        switch (err) {
+            error.ModNotFound => std.log.err("Mod {d} not found in {s}", .{ mod_id, game_domain }),
+            error.InvalidApiKey => std.log.err("API key is invalid", .{}),
+            else => std.log.err("Error: {}", .{err}),
+        }
+        return;
+    };
+    defer {
+        for (files) |*f| {
+            var file = f.*;
+            file.deinit(allocator);
+        }
+        allocator.free(files);
+    }
+
+    compat.print("\nFiles for mod {d} in {s}:\n", .{ mod_id, game_domain });
+    compat.print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n", .{});
+    
+    for (files) |file| {
+        const size_mb = @as(f64, @floatFromInt(file.size_kb)) / 1024.0;
+        compat.print("\nFile ID: {d}\n", .{file.file_id});
+        compat.print("  Name:     {s}\n", .{file.name});
+        compat.print("  Version:  {s}\n", .{file.version});
+        compat.print("  Category: {s}\n", .{file.category_name});
+        compat.print("  Size:     {d:.1} MB\n", .{size_mb});
+        compat.print("  Primary:  {s}\n", .{if (file.is_primary) "Yes" else "No"});
+    }
+    
+    compat.print("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n", .{});
+    compat.print("Total: {d} file(s)\n", .{files.len});
+    compat.print("\nTo download: stl-next nexus-download {s} {d} <file_id>\n", .{ game_domain, mod_id });
+}
+
+fn nexusDownload(allocator: std.mem.Allocator, game_domain: []const u8, mod_id: u64, file_id: u64) !void {
+    var client = nexusmods.NexusClient.init(allocator);
+    defer client.deinit();
+
+    client.discoverApiKey() catch {
+        std.log.err("No API key found. Run: stl-next nexus-login YOUR_API_KEY", .{});
+        return;
+    };
+
+    const links = client.getDownloadLink(game_domain, mod_id, file_id, null, null) catch |err| {
+        switch (err) {
+            error.NotPremium => {
+                std.log.err("Direct downloads require Nexus Premium membership", .{});
+                std.log.err("Use the 'Mod Manager Download' button on nexusmods.com instead", .{});
+                std.log.err("STL-Next will catch the NXM link automatically", .{});
+            },
+            error.ModNotFound => std.log.err("Mod or file not found", .{}),
+            error.InvalidApiKey => std.log.err("API key is invalid", .{}),
+            else => std.log.err("Error: {}", .{err}),
+        }
+        return;
+    };
+    defer {
+        for (links) |*l| {
+            var link = l.*;
+            link.deinit(allocator);
+        }
+        allocator.free(links);
+    }
+
+    compat.print("\nDownload links for file {d}:\n", .{file_id});
+    compat.print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n", .{});
+    
+    for (links) |link| {
+        compat.print("\n[{s}] {s}\n", .{ link.short_name, link.name });
+        compat.print("  {s}\n", .{link.uri});
+    }
+    
+    compat.print("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n", .{});
+    compat.print("Use wget or curl to download, or pipe to your download manager.\n", .{});
+}
+
+fn nexusTrackMod(allocator: std.mem.Allocator, game_domain: []const u8, mod_id: u64) !void {
+    var client = nexusmods.NexusClient.init(allocator);
+    defer client.deinit();
+
+    client.discoverApiKey() catch {
+        std.log.err("No API key found. Run: stl-next nexus-login YOUR_API_KEY", .{});
+        return;
+    };
+
+    client.trackMod(game_domain, mod_id) catch |err| {
+        switch (err) {
+            error.ModNotFound => std.log.err("Mod {d} not found in {s}", .{ mod_id, game_domain }),
+            error.InvalidApiKey => std.log.err("API key is invalid", .{}),
+            else => std.log.err("Error: {}", .{err}),
+        }
+        return;
+    };
+
+    compat.print("✓ Now tracking mod {d} in {s}\n", .{ mod_id, game_domain });
+    compat.print("  You'll be notified of updates on nexusmods.com\n", .{});
+}
+
+fn nexusTrackedMods(allocator: std.mem.Allocator) !void {
+    var client = nexusmods.NexusClient.init(allocator);
+    defer client.deinit();
+
+    client.discoverApiKey() catch {
+        std.log.err("No API key found. Run: stl-next nexus-login YOUR_API_KEY", .{});
+        return;
+    };
+
+    const mods = client.getTrackedMods() catch |err| {
+        switch (err) {
+            error.InvalidApiKey => std.log.err("API key is invalid", .{}),
+            else => std.log.err("Error: {}", .{err}),
+        }
+        return;
+    };
+    defer {
+        for (mods) |*m| {
+            var mod = m.*;
+            mod.deinit(allocator);
+        }
+        allocator.free(mods);
+    }
+
+    compat.print("\n╔════════════════════════════════════════════╗\n", .{});
+    compat.print("║           TRACKED MODS                     ║\n", .{});
+    compat.print("╠════════════════════════════════════════════╣\n", .{});
+    
+    if (mods.len == 0) {
+        compat.print("║ No tracked mods                            ║\n", .{});
+    } else {
+        for (mods) |mod| {
+            compat.print("║ [{s: <20}] {d: <16} ║\n", .{ mod.domain_name[0..@min(20, mod.domain_name.len)], mod.mod_id });
+        }
+    }
+    
+    compat.print("╚════════════════════════════════════════════╝\n", .{});
+    compat.print("Total: {d} mod(s) tracked\n", .{mods.len});
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

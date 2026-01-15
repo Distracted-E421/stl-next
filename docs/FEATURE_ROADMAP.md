@@ -26,10 +26,11 @@ This document tracks feature parity with the original SteamTinkerLaunch and plan
 | Feature | Original STL | STL-Next | Notes |
 |---------|-------------|----------|-------|
 | MO2 Integration | ✅ | 🚧 Basic | Detection only |
-| Vortex Integration | ✅ | 🚧 Basic | Detection only |
+| Vortex Integration | ✅ | ✅ Basic | Auto-discovery, NXM forwarding |
 | ReShade | ✅ | ❌ Phase 6 | Planned |
 | SpecialK | ✅ | ❌ Phase 6 | Planned |
-| GUI | ✅ (yad) | ❌ Phase 5.5 | Raylib (next up!) |
+| GUI | ✅ (yad) | ✅ Raylib | Wait Requester complete |
+| Nexus Mods API | ❌ | ✅ Full | Premium downloads, tracking |
 
 ### ✅ Phase 5: Nix Packaging (Complete)
 
@@ -40,6 +41,18 @@ This document tracks feature parity with the original SteamTinkerLaunch and plan
 | Home Manager Module | User-level installation | ✅ |
 | NXM Handler Registration | Desktop entry for nxm:// | ✅ |
 | Zig 0.15.2 | Latest stable (upgraded from 0.14.0) | ✅ |
+
+### ✅ Phase 5.5: GUI & API Integration (Complete)
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Raylib GUI | Wait Requester with visual countdown | ✅ |
+| IPC Integration | GUI ↔ Daemon communication | ✅ |
+| Wayland Support | HiDPI workarounds documented | ✅ |
+| Vortex Integration | Auto-discovery, NXM forwarding | ✅ |
+| Nexus Mods API | Full v1 API client | ✅ |
+| API Key Management | Env, config, sops-nix, agenix | ✅ |
+| CLI Parity | Full CLI/GUI feature parity | ✅ |
 
 ### ✅ Now Implemented (Phase 4.5)
 

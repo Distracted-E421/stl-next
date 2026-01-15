@@ -2,6 +2,70 @@
 
 All notable changes to STL-Next are documented in this file.
 
+## [0.5.5-alpha] - Nexus Mods API + GUI Wayland Fix
+
+### Added
+
+#### Nexus Mods API Client (`src/api/nexusmods.zig`)
+
+Full Nexus Mods API v1 integration with Premium download support:
+
+- **API Key Discovery** - Auto-loads from:
+  1. `STL_NEXUS_API_KEY` environment variable
+  2. `~/.config/stl-next/nexus_api_key` file
+  3. `/run/secrets/nexus_api_key` (sops-nix)
+  4. `/run/agenix/nexus_api_key` (agenix)
+
+- **CLI Commands**:
+  - `nexus` - Show Nexus Mods help
+  - `nexus-login [key]` - Save and validate API key
+  - `nexus-whoami` - Show current user info (name, premium status)
+  - `nexus-mod <game> <mod_id>` - Get mod details
+  - `nexus-files <game> <mod_id>` - List available files
+  - `nexus-download <game> <mod_id> <file_id>` - Get download links (Premium)
+  - `nexus-track <game> <mod_id>` - Track mod for updates
+  - `nexus-tracked` - List tracked mods
+
+- **API Endpoints**:
+  - `GET /v1/users/validate.json` - Validate API key
+  - `GET /v1/games/{domain}/mods/{id}.json` - Get mod info
+  - `GET /v1/games/{domain}/mods/{id}/files.json` - List files
+  - `GET /v1/games/{domain}/mods/{id}/files/{file_id}/download_link.json` - Download links
+  - `POST /v1/user/tracked_mods.json` - Track mod
+  - `GET /v1/user/tracked_mods.json` - List tracked mods
+  - `POST /v1/games/{domain}/mods/{id}/endorse.json` - Endorse mod
+
+#### NixOS Secret Management Documentation (`docs/NEXUS_API_SECRETS.md`)
+
+Comprehensive guide for managing Nexus API keys on NixOS:
+
+- sops-nix integration with example configuration
+- agenix integration with example configuration
+- Home Manager module for declarative setup
+- Security best practices (chmod 600, .gitignore)
+- Rate limiting information (2500/day, 100/hour after limit)
+
+### Fixed
+
+#### GUI Wayland Improvements
+
+- Added warning for Wayland HiDPI mouse coordinate issues
+- Recommend `GDK_BACKEND=x11` workaround for affected systems
+- Reference to upstream raylib issue #3872
+
+### Changed
+
+- HTTP requests now use curl subprocess for better reliability
+- Handles gzip compression and TLS automatically
+
+### Security
+
+- Added `*.env`, `.env*`, `nexus_api_key` to `.gitignore`
+- Never hardcode API keys in source code
+- API keys read from environment/files only
+
+---
+
 ## [0.5.4-alpha] - GUI Fixes + Vortex Integration
 
 ### Fixed

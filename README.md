@@ -39,6 +39,7 @@ See: [STL_URL_TRUNCATION_BUG_REPORT.md](../stardew-modding-nix/STL_URL_TRUNCATIO
 | Phase 5 | ✅ Complete | **Nix Flake Packaging**, NixOS/Home Manager Modules |
 | Phase 5.5 | ✅ Complete | **Raylib GUI** - Modern Wait Requester |
 | Phase 5.6 | ✅ Complete | **Vortex Integration** - Auto-discovery, NXM forwarding |
+| Phase 5.7 | ✅ Complete | **Nexus Mods API** - Full v1 client, tracking, Premium downloads |
 | Phase 6 | 📋 Planned | Full MO2 USVFS, ReShade, VR support |
 
 ### Zig Version
@@ -187,13 +188,34 @@ src/
     └── vortex.zig        # Vortex auto-discovery + NXM forwarding
 ```
 
-## 🎮 New CLI Commands (Phase 4)
+## 🎮 New CLI Commands (Phase 4+)
 
 | Command | Description |
 |---------|-------------|
 | `wait <AppID>` | Start wait requester daemon with countdown |
 | `tui <AppID>` | Connect TUI client to running daemon |
 | `nxm <url>` | Handle NXM protocol link from browser |
+
+### Nexus Mods Commands (Phase 5.5)
+
+```bash
+# Setup (get key from nexusmods.com/users/myaccount?tab=api%20access)
+stl-next nexus-login YOUR_API_KEY   # Save API key
+stl-next nexus-whoami               # Verify key + show user info
+
+# Mod information
+stl-next nexus-mod stardewvalley 21297        # Get mod details
+stl-next nexus-files stardewvalley 21297      # List downloadable files
+
+# Downloads (Premium Nexus members only)
+stl-next nexus-download stardewvalley 21297 12345  # Get download link
+
+# Update tracking
+stl-next nexus-track stardewvalley 21297      # Track mod for updates
+stl-next nexus-tracked                         # List all tracked mods
+```
+
+See: [NEXUS_API_SECRETS.md](docs/NEXUS_API_SECRETS.md) for NixOS secret management.
 
 ## 🔧 Environment Variables
 
@@ -202,6 +224,8 @@ src/
 | `STL_SKIP_WAIT` | Skip wait requester (instant launch) |
 | `STL_COUNTDOWN` | Countdown seconds (default: 10) |
 | `STL_CONFIG_DIR` | Config directory |
+| `STL_NEXUS_API_KEY` | Nexus Mods API key (get from nexusmods.com) |
+| `STEAMGRIDDB_API_KEY` | SteamGridDB API key (free at steamgriddb.com) |
 
 ## 🛡️ Error Handling (Hardened)
 
@@ -271,6 +295,7 @@ Edge case tests in `src/tests/edge_cases.zig`:
 | [Custom Commands](docs/CUSTOM_COMMANDS.md) | Pre/post launch shell commands |
 | [Non-Steam Games](docs/NONSTEAM_GAMES.md) | Adding GOG, Epic, and other games |
 | [SteamGridDB Guide](docs/STEAMGRIDDB_GUIDE.md) | Game artwork integration |
+| [Nexus API Secrets](docs/NEXUS_API_SECRETS.md) | API key management (sops-nix, agenix) |
 
 ## 🔧 Development
 

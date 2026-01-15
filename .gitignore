@@ -30,3 +30,8 @@ coverage/
 # Local config (for development testing)
 .stl-next-dev/
 
+
+# Nexus Mods API key - NEVER commit
+nexus_api_key
+*.env
+.env*
