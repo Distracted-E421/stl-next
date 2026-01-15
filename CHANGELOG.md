@@ -2,6 +2,48 @@
 
 All notable changes to STL-Next are documented in this file.
 
+## [0.5.3-alpha] - Phase 5.5: Raylib GUI
+
+### Added
+
+#### Raylib-based Wait Requester GUI
+
+- **Modern dark-themed UI** using Catppuccin Mocha color scheme
+- **Visual countdown timer** with animated progress bar
+- **Tinker toggles** with hover effects and color-coded indicators
+  - MangoHud, Gamescope, GameMode, Winetricks, Custom Commands, SteamGridDB
+- **Interactive buttons** - Launch Now, Pause/Resume, Cancel
+- **Keyboard shortcuts** - Enter (launch), Space (pause), Tab (skip), Esc (cancel)
+- **Window dragging** via title bar (Wayland/X11 compatible)
+- **Daemon output** - Prints LAUNCH/CANCELLED and enabled tinkers to stdout
+
+#### Build System Updates
+
+- **Optional GUI build** - Use `zig build -Dgui` to include GUI
+- **Separate binary** - `stl-next-gui` built alongside CLI
+- **Raylib integration** via system libraries and @cImport
+
+### Technical Details
+
+- Uses Raylib 5.5 via @cImport for clean C interop
+- 640x440 undecorated window with MSAA 4x
+- 60 FPS target with smooth countdown animation
+- Compatible with Wayland (GLFW backend) and X11
+- OpenGL 4.6 rendering on Intel Arc A770 tested
+
+### Usage
+
+```bash
+# Build with GUI support
+zig build -Dgui
+
+# Run GUI
+./zig-out/bin/stl-next-gui <AppID> "<Game Name>" [countdown_seconds]
+./zig-out/bin/stl-next-gui 413150 "Stardew Valley" 15
+```
+
+---
+
 ## [0.5.2-alpha] - Zig 0.15.2 Migration
 
 ### Changed

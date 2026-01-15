@@ -4,7 +4,10 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // Main CLI executable (Zig 0.15.x API)
+    // Build options
+    const build_gui = b.option(bool, "gui", "Build with Raylib GUI (requires raylib)") orelse false;
+
+    // Main CLI executable
     const exe = b.addExecutable(.{
         .name = "stl-next",
         .root_module = b.createModule(.{
@@ -17,6 +20,39 @@ pub fn build(b: *std.Build) void {
     exe.linkLibC();
     b.installArtifact(exe);
 
+    // GUI executable (optional, requires raylib)
+    if (build_gui) {
+        const gui_exe = b.addExecutable(.{
+            .name = "stl-next-gui",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/gui/main.zig"),
+                .target = target,
+                .optimize = optimize,
+            }),
+        });
+        
+        gui_exe.linkLibC();
+        gui_exe.linkSystemLibrary("raylib");
+        gui_exe.linkSystemLibrary("GL");
+        gui_exe.linkSystemLibrary("m");
+        gui_exe.linkSystemLibrary("pthread");
+        gui_exe.linkSystemLibrary("dl");
+        gui_exe.linkSystemLibrary("rt");
+        gui_exe.linkSystemLibrary("X11");
+        
+        b.installArtifact(gui_exe);
+        
+        // Run GUI command
+        const run_gui = b.addRunArtifact(gui_exe);
+        run_gui.step.dependOn(b.getInstallStep());
+        if (b.args) |args| {
+            run_gui.addArgs(args);
+        }
+        
+        const run_gui_step = b.step("run-gui", "Run STL-Next GUI");
+        run_gui_step.dependOn(&run_gui.step);
+    }
+
     // Run command
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
@@ -24,10 +60,10 @@ pub fn build(b: *std.Build) void {
         run_cmd.addArgs(args);
     }
     
-    const run_step = b.step("run", "Run STL-Next");
+    const run_step = b.step("run", "Run STL-Next CLI");
     run_step.dependOn(&run_cmd.step);
 
-    // Tests - only test through main.zig to get proper module resolution
+    // Tests
     const main_tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
