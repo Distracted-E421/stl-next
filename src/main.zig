@@ -422,7 +422,7 @@ fn runGame(allocator: std.mem.Allocator, app_id: u32, extra_args: []const []cons
     // Pass profile name to launcher (will be used to apply GPU env vars)
     const result = try launchWithProfile(allocator, &steam_engine, app_id, filtered_args.items, &game_config, effective_profile_name, false);
     defer result.deinit();
-    
+
     if (!result.success) {
         if (result.error_msg) |msg| std.log.err("Launch failed: {s}", .{msg});
         return error.LaunchFailed;
@@ -2094,13 +2094,13 @@ fn profileCreate(allocator: std.mem.Allocator, app_id: u32, name: []const u8, ex
         compat.print("\nError adding profile: {s}\n", .{@errorName(err)});
         return;
     };
-    
+
     // Save the config
     config.saveGameConfig(allocator, &mutable_config) catch |err| {
         compat.print("\n⚠️ Could not save config: {s}\n", .{@errorName(err)});
         compat.print("Profile created in memory but not persisted.\n", .{});
     };
-    
+
     compat.print("\n✅ Profile saved!\n\n", .{});
     compat.print("To use:\n", .{});
     compat.print("  stl-next run {d} --profile \"{s}\"\n", .{ app_id, name });
@@ -2142,13 +2142,13 @@ fn profileSet(allocator: std.mem.Allocator, app_id: u32, profile_name: []const u
     if (game_config.getProfile(profile_name)) |_| {
         // Set the active profile
         game_config.active_profile = profile_name;
-        
+
         // Save the config
         config.saveGameConfig(allocator, &game_config) catch |err| {
             compat.print("⚠️ Could not save config: {s}\n", .{@errorName(err)});
             return;
         };
-        
+
         compat.print("✅ Active profile set to \"{s}\" for AppID {d}\n", .{ profile_name, app_id });
         compat.print("Next launch will use this profile's GPU/monitor settings.\n", .{});
     } else {
@@ -2169,7 +2169,7 @@ fn profileDelete(allocator: std.mem.Allocator, app_id: u32, profile_name: []cons
         compat.print("No configuration found for AppID {d}\n", .{app_id});
         return;
     };
-    
+
     game_config.removeProfile(allocator, profile_name) catch |err| {
         switch (err) {
             error.CannotRemoveDefault => compat.print("Cannot delete the Default profile.\n", .{}),
@@ -2179,13 +2179,13 @@ fn profileDelete(allocator: std.mem.Allocator, app_id: u32, profile_name: []cons
         }
         return;
     };
-    
+
     // Save the updated config
     config.saveGameConfig(allocator, &game_config) catch |err| {
         compat.print("⚠️ Profile removed but could not save: {s}\n", .{@errorName(err)});
         return;
     };
-    
+
     compat.print("✅ Profile \"{s}\" deleted from AppID {d}\n", .{ profile_name, app_id });
 }
 
@@ -2270,11 +2270,11 @@ fn writeSteamShortcut(
     const steam_path = std.posix.getenv("HOME") orelse return error.NoHome;
     const userdata_base = try std.fmt.allocPrint(allocator, "{s}/.steam/steam/userdata", .{steam_path});
     defer allocator.free(userdata_base);
-    
+
     // Find the user ID directory (usually there's only one)
     var userdata_dir = std.fs.openDirAbsolute(userdata_base, .{ .iterate = true }) catch return error.NoSteamUserdata;
     defer userdata_dir.close();
-    
+
     var user_id: ?[]const u8 = null;
     var iter = userdata_dir.iterate();
     while (iter.next() catch null) |entry| {
@@ -2285,25 +2285,25 @@ fn writeSteamShortcut(
             break;
         }
     }
-    
+
     const uid = user_id orelse return error.NoSteamUser;
     defer allocator.free(uid);
-    
+
     const shortcuts_path = try std.fmt.allocPrint(allocator, "{s}/{s}/config/shortcuts.vdf", .{ userdata_base, uid });
     defer allocator.free(shortcuts_path);
-    
+
     compat.print("Steam shortcuts file: {s}\n", .{shortcuts_path});
-    
+
     // Generate a unique shortcut ID based on exe+name hash
     // Steam uses a CRC-like algorithm but this should be unique enough
     const hash1 = std.hash.Wyhash.hash(0, exe_path);
     const hash2 = std.hash.Wyhash.hash(hash1, name);
     const shortcut_id: u32 = @truncate(hash2);
-    
+
     // Get the start directory (directory containing the exe)
     const start_dir = getStartDir(allocator, exe_path) catch try allocator.dupe(u8, "");
     defer allocator.free(start_dir);
-    
+
     // Try to write the binary VDF
     writeShortcutsVdf(allocator, shortcuts_path, name, exe_path, start_dir, launch_options, shortcut_id) catch |err| {
         compat.print("\n📝 Shortcut entry (for manual addition):\n", .{});
@@ -2313,7 +2313,7 @@ fn writeSteamShortcut(
         compat.print("   LaunchOptions: {s}\n", .{launch_options});
         return err;
     };
-    
+
     return shortcut_id;
 }
 
@@ -2342,9 +2342,9 @@ fn writeShortcutsVdf(
     // Read existing shortcuts if file exists
     var existing_shortcuts: std.ArrayListUnmanaged(u8) = .{};
     defer existing_shortcuts.deinit(allocator);
-    
+
     var next_index: u32 = 0;
-    
+
     // Try to read existing file
     if (std.fs.openFileAbsolute(path, .{})) |file| {
         defer file.close();
@@ -2353,7 +2353,7 @@ fn writeShortcutsVdf(
             const content = try allocator.alloc(u8, stat.size);
             defer allocator.free(content);
             _ = try file.readAll(content);
-            
+
             // Find the highest existing index
             // Format: \x00"N"\x00 where N is the index
             var i: usize = 0;
@@ -2370,7 +2370,7 @@ fn writeShortcutsVdf(
                     }
                 }
             }
-            
+
             // Copy existing content (without final \x08\x08)
             if (content.len > 2 and content[content.len - 1] == 0x08 and content[content.len - 2] == 0x08) {
                 try existing_shortcuts.appendSlice(allocator, content[0 .. content.len - 2]);
@@ -2379,11 +2379,11 @@ fn writeShortcutsVdf(
             }
         }
     } else |_| {}
-    
+
     // Create new file
     const file = try std.fs.createFileAbsolute(path, .{});
     defer file.close();
-    
+
     // If we have existing content, write it
     if (existing_shortcuts.items.len > 0) {
         try file.writeAll(existing_shortcuts.items);
@@ -2391,7 +2391,7 @@ fn writeShortcutsVdf(
         // Write header: \x00shortcuts\x00
         try file.writeAll("\x00shortcuts\x00");
     }
-    
+
     // Write new shortcut entry
     // Format: \x00"index"\x00
     var idx_buf: [16]u8 = undefined;
@@ -2399,77 +2399,77 @@ fn writeShortcutsVdf(
     try file.writeAll("\x00\"");
     try file.writeAll(idx_str);
     try file.writeAll("\"\x00");
-    
+
     // Write appid (type 0x02 = uint32)
     try file.writeAll("\x02appid\x00");
     try file.writeAll(&std.mem.toBytes(app_id));
-    
+
     // Write AppName (type 0x01 = string)
     try file.writeAll("\x01AppName\x00");
     try file.writeAll(name);
     try file.writeAll("\x00");
-    
+
     // Write Exe (type 0x01 = string)
     try file.writeAll("\x01Exe\x00\"");
     try file.writeAll(exe_path);
     try file.writeAll("\"\x00");
-    
+
     // Write StartDir (type 0x01 = string)
     try file.writeAll("\x01StartDir\x00\"");
     try file.writeAll(start_dir);
     try file.writeAll("\"\x00");
-    
+
     // Write icon (type 0x01 = string, empty)
     try file.writeAll("\x01icon\x00\x00");
-    
+
     // Write ShortcutPath (type 0x01 = string, empty)
     try file.writeAll("\x01ShortcutPath\x00\x00");
-    
+
     // Write LaunchOptions (type 0x01 = string)
     try file.writeAll("\x01LaunchOptions\x00");
     try file.writeAll(launch_options);
     try file.writeAll("\x00");
-    
+
     // Write IsHidden (type 0x02 = uint32, value 0)
     try file.writeAll("\x02IsHidden\x00");
     try file.writeAll(&std.mem.toBytes(@as(u32, 0)));
-    
+
     // Write AllowDesktopConfig (type 0x02 = uint32, value 1)
     try file.writeAll("\x02AllowDesktopConfig\x00");
     try file.writeAll(&std.mem.toBytes(@as(u32, 1)));
-    
+
     // Write AllowOverlay (type 0x02 = uint32, value 1)
     try file.writeAll("\x02AllowOverlay\x00");
     try file.writeAll(&std.mem.toBytes(@as(u32, 1)));
-    
+
     // Write OpenVR (type 0x02 = uint32, value 0)
     try file.writeAll("\x02OpenVR\x00");
     try file.writeAll(&std.mem.toBytes(@as(u32, 0)));
-    
+
     // Write Devkit (type 0x02 = uint32, value 0)
     try file.writeAll("\x02Devkit\x00");
     try file.writeAll(&std.mem.toBytes(@as(u32, 0)));
-    
+
     // Write DevkitGameID (type 0x01 = string, empty)
     try file.writeAll("\x01DevkitGameID\x00\x00");
-    
+
     // Write DevkitOverrideAppID (type 0x02 = uint32, value 0)
     try file.writeAll("\x02DevkitOverrideAppID\x00");
     try file.writeAll(&std.mem.toBytes(@as(u32, 0)));
-    
+
     // Write LastPlayTime (type 0x02 = uint32, value 0)
     try file.writeAll("\x02LastPlayTime\x00");
     try file.writeAll(&std.mem.toBytes(@as(u32, 0)));
-    
+
     // Write tags (empty nested object)
     try file.writeAll("\x00tags\x00\x08");
-    
+
     // Close this shortcut entry
     try file.writeAll("\x08");
-    
+
     // Close shortcuts section and file
     try file.writeAll("\x08");
-    
+
     std.log.info("Shortcuts: Written to {s}", .{path});
 }
 

@@ -29,9 +29,9 @@ $ ./stl-next nxm "nxm://stardewvalley/collections/tckf0m/revisions/100"
 
 See: [STL_URL_TRUNCATION_BUG_REPORT.md](../stardew-modding-nix/STL_URL_TRUNCATION_BUG_REPORT.md)
 
-Additionally, if you look at the code for the orginal STL (and this is not shade, hate, or anything at the original dev or any maintainers, love yall <3), its a brittle, terrifing, 30,000 plus lines of bash. and thats after they did a modular rewrite from a 21,000 line monolit bash script. Bash is great, but not here, where all that overhead is causing it to take a while to start up, or complete actions.
+Additionally, if you look at the code for the orginal STL (and this is not shade, hate, or anything at the original dev or any maintainers, love yall <3), its a brittle, terrifing, 30,000 plus lines of bash. and thats after they did a modular rewrite from a 21,000 line monolit bash script. Bash is great, but not here, where all that overhead is causing it to take a while to start up, or complete actions. Again, this is not shade to past development, I am greatful for the projects very existence, as it has given me a create conceptual base to work from.
 
-While its def overkill, I have decided to do this rewrite in Zig, to get as small as possible as a binary, as well as if there is any c interop issues with the edge cases like vr, dos games, cross platform stuff, mod managers, winetricks, etc etc.
+While it is def overkill, I have decided to do this rewrite in Zig, to get as small as possible as a binary, as well as if there is any c interop issues with the edge cases like vr, dos games, cross platform stuff, mod managers, winetricks, etc etc.
 
 ## 📊 Project Status
 
@@ -49,57 +49,59 @@ While its def overkill, I have decided to do this rewrite in Zig, to get as smal
 | Phase 5.7 | ✅ Complete | **Nexus Mods API** - Full v1 client, tracking, Premium downloads |
 | Phase 6 | ✅ Complete | **14 Tinkers**: ReShade, vkBasalt, SpecialK, LatencyFleX, MultiApp, Boxtron, OBS, DLSS, OptiScaler |
 | Phase 7 | ✅ Complete | **Stardrop Integration** + **Nexus Collections Import** (KILLER FEATURE!) |
-| Phase 8 | 🚧 In Progress | **D-Bus Integration** (Multi-GPU!), Session Management |
+| Phase 8 | ✅ Complete | **D-Bus Integration** (Multi-GPU!), GPU Selection, Session Management |
+| Phase 8.5 | ✅ Complete | **Launch Profiles** - Per-game GPU/Monitor presets, Steam Shortcuts |
 | Phase 9 | 📋 Planned | Full MO2 USVFS, VR support, Steam Deck mode |
 
 ### Zig Version
 
 STL-Next is built with **Zig 0.15.2** (latest stable). The Raylib GUI is next in the roadmap.
 
-## ✨ Phase 4 Features
+## 🎮 Phase 8.5: Launch Profiles (NEW!)
 
-### IPC Daemon/Client Architecture
+No more remembering launch options! Save per-game GPU/monitor configurations:
 
-```bash
-# Terminal 1: Start the wait requester daemon
-$ ./stl-next wait 413150
-╔════════════════════════════════════════════╗
-║      STL-NEXT WAIT REQUESTER v0.4.0-alpha  ║
-╚════════════════════════════════════════════╝
-Game: Stardew Valley
-IPC Server: Listening on /run/user/1000/stl-next-413150.sock
-Wait Requester: 10s remaining...
-
-# Terminal 2: Connect with TUI client
-$ ./stl-next tui 413150
-```
-
-### NXM Protocol Handler
+### Create a Profile
 
 ```bash
-$ ./stl-next nxm "nxm://stardewvalley/mods/12345/files/67890"
-NXM Handler: nxm://stardewvalley/mods/12345/files/67890
-  Game: stardewvalley
-  Mod ID: 12345
-  File ID: 67890
+# Create a profile for your Arc GPU on main monitor
+stl-next profile-create 413150 "Arc-Main" --gpu arc --monitor DP-1 --resolution 2560x1440@144
+
+# Create a profile for NVIDIA on secondary monitor  
+stl-next profile-create 413150 "RTX-4K" --gpu nvidia --monitor HDMI-1 --resolution 3840x2160@60
 ```
 
-### TUI (Terminal User Interface)
+### Use Profiles
 
+```bash
+# Launch with a specific profile
+stl-next run 413150 --profile "Arc-Main"
+
+# Set default profile (used when no --profile specified)
+stl-next profile-set 413150 "Arc-Main"
+
+# List all profiles for a game
+stl-next profile-list 413150
 ```
-╔════════════════════════════════════════════════════════════════════╗
-║                    STL-NEXT WAIT REQUESTER                         ║
-╠════════════════════════════════════════════════════════════════════╣
-║ Game: Stardew Valley                                               ║
-║ AppID: 413150                                                      ║
-╠════════════════════════════════════════════════════════════════════╣
-║ Commands:                                                          ║
-║   [P] Pause countdown    [R] Resume countdown                      ║
-║   [L] Launch now         [Q] Quit/Abort                            ║
-║   [M] Toggle MangoHud    [G] Toggle Gamescope                      ║
-╚════════════════════════════════════════════════════════════════════╝
 
-⏱️  Launching in... 8s [████████░░]
+### Steam Library Integration
+
+```bash
+# Create a Steam shortcut for a profile
+# Appears as "Stardew Valley [Arc-Main]" in your library!
+stl-next profile-shortcut 413150 "Arc-Main"
+```
+
+### Multi-GPU Support
+
+```bash
+# List detected GPUs
+stl-next gpu-list
+
+# Test GPU selection
+stl-next gpu-test nvidia   # Test NVIDIA env vars
+stl-next gpu-test arc      # Test Intel Arc env vars
+stl-next gpu-test 0        # Test specific GPU index
 ```
 
 ## 🚀 Performance

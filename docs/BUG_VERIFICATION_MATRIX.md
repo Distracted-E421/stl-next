@@ -282,6 +282,19 @@ pub fn encodeForWine(self: *const Self, allocator: std.mem.Allocator) ![]const u
 | Non-Steam | 3 | 0 | 0 | 2 | 1 |
 | **TOTAL** | **24** | **5** | **2** | **11** | **6** |
 
+## New STL-Next Features (Beyond Bug Fixes)
+
+These features go beyond fixing original STL bugs:
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Multi-GPU Support** | D-Bus GPU detection, per-game selection | ✅ Complete |
+| **Launch Profiles** | Save GPU/monitor/resolution per game | ✅ Complete |
+| **Steam Shortcuts** | Binary VDF writing for profile shortcuts | ✅ Complete |
+| **Profile Persistence** | JSON config, survives restarts | ✅ Complete |
+| **Session Management** | Power profiles, screen saver inhibit | ✅ Complete |
+| **Nexus Collections** | GraphQL API for one-click collection import | ✅ Complete |
+
 ## Testing Priority
 
 ### High Priority (Test Before Release)

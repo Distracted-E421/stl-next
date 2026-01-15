@@ -2,14 +2,16 @@
 
 This document provides step-by-step testing procedures for validating STL-Next with specific games before public release.
 
+> **Note**: For core feature testing (CLI, NXM, GPU, Profiles), see [AGENT_TEST_WALKTHROUGH.md](AGENT_TEST_WALKTHROUGH.md)
+
 ## Target Games for Initial Testing
 
 | Game | Steam ID | Primary Test Focus |
 |------|----------|-------------------|
-| Stardew Valley | 413150 | SMAPI, NXM mods, Stardrop integration |
+| Stardew Valley | 413150 | SMAPI, NXM mods, Stardrop integration, **Profile testing** |
 | Skyrim SE | 489830 | MO2/Vortex, script extenders, load order |
 | Fallout 4 | 377160 | F4SE, Vortex AppData sync, plugins.txt |
-| Cyberpunk 2077 | 1091500 | ReShade, large mod files, performance |
+| Cyberpunk 2077 | 1091500 | ReShade, large mod files, performance, **Multi-GPU** |
 
 ---
 
@@ -125,19 +127,47 @@ stl-next test-nxm "nxm://stardewvalley/collections/tckf0m/revisions/100"
 - [ ] Collection links preserve `/revisions/N` segment
 - [ ] Wine-encoded URLs contain `%2F` instead of `/`
 
-#### TC-SDV-004: Stardrop Integration (Future)
+#### TC-SDV-004: Stardrop Integration
 
 **Purpose**: Test Stardrop mod manager integration
 
 ```bash
-# Note: Stardrop integration not yet implemented
-# This test case is a placeholder for Phase 5
+# Discover Stardrop installation
+stl-next stardrop-discover
 
-# Expected workflow:
-# 1. stl-next detects Stardrop installation
-# 2. stl-next can launch Stardrop
-# 3. NXM links forwarded to Stardrop
+# List existing Stardrop profiles
+stl-next stardrop-profiles
+
+# Expected: Shows Stardrop path and profiles if installed
 ```
+
+**Pass Criteria**:
+- [ ] Stardrop path detected (if installed)
+- [ ] Profiles listed correctly
+
+#### TC-SDV-005: Launch Profiles
+
+**Purpose**: Test per-game profile system with Stardew Valley
+
+```bash
+# Create a profile for modded gameplay
+stl-next profile-create 413150 "Modded" --mangohud --gpu integrated
+
+# Create a profile for streaming (higher resolution, no overlay)
+stl-next profile-create 413150 "Streaming" --resolution 1920x1080@60 --no-mangohud
+
+# List profiles
+stl-next profile-list 413150
+
+# Launch with specific profile
+stl-next run 413150 --profile "Modded"
+```
+
+**Pass Criteria**:
+- [ ] Profiles created successfully
+- [ ] Profiles listed with correct settings
+- [ ] Game launches with profile-specific settings
+- [ ] MangoHud visible (Modded) / hidden (Streaming)
 
 ---
 

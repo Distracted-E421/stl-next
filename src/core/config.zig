@@ -472,7 +472,7 @@ pub const GameConfig = struct {
         }
         return null;
     }
-    
+
     /// Add a new profile (allocates new profiles array)
     /// Note: This leaks the old profiles array in debug builds. For a CLI tool that
     /// exits immediately, this is acceptable. For long-running processes, consider
@@ -484,22 +484,22 @@ pub const GameConfig = struct {
                 return error.ProfileExists;
             }
         }
-        
+
         // Create new profiles array with the added profile
         const new_profiles = try allocator.alloc(LaunchProfile, self.profiles.len + 1);
         @memcpy(new_profiles[0..self.profiles.len], self.profiles);
         new_profiles[self.profiles.len] = profile;
-        
+
         // Update profiles pointer
         self.profiles = new_profiles;
     }
-    
+
     /// Remove a profile by name
     pub fn removeProfile(self: *GameConfig, allocator: std.mem.Allocator, name: []const u8) !void {
         if (std.mem.eql(u8, name, "Default")) {
             return error.CannotRemoveDefault;
         }
-        
+
         // Find the profile index
         var found_idx: ?usize = null;
         for (self.profiles, 0..) |profile, i| {
@@ -508,14 +508,14 @@ pub const GameConfig = struct {
                 break;
             }
         }
-        
+
         const idx = found_idx orelse return error.ProfileNotFound;
-        
+
         // Create new array without the removed profile
         if (self.profiles.len == 1) {
             return error.CannotRemoveLastProfile;
         }
-        
+
         var new_profiles = try allocator.alloc(LaunchProfile, self.profiles.len - 1);
         var j: usize = 0;
         for (self.profiles, 0..) |profile, i| {
@@ -524,12 +524,12 @@ pub const GameConfig = struct {
                 j += 1;
             }
         }
-        
+
         // If active profile was removed, switch to first
         if (std.mem.eql(u8, self.active_profile, name)) {
             self.active_profile = new_profiles[0].name;
         }
-        
+
         self.profiles = new_profiles;
     }
 };
@@ -682,11 +682,11 @@ pub fn loadGameConfig(allocator: std.mem.Allocator, app_id: u32) !GameConfig {
         if (profiles_val == .array) {
             const profiles_array = profiles_val.array;
             var profiles_list = try allocator.alloc(LaunchProfile, profiles_array.items.len);
-            
+
             for (profiles_array.items, 0..) |profile_val, i| {
                 if (profile_val != .object) continue;
                 const profile_obj = profile_val.object;
-                
+
                 var profile = LaunchProfile{
                     .name = "Unnamed",
                     .gpu_preference = .auto,
@@ -698,7 +698,7 @@ pub fn loadGameConfig(allocator: std.mem.Allocator, app_id: u32) !GameConfig {
                     .enable_gamemode = null,
                     .create_steam_shortcut = false,
                 };
-                
+
                 if (profile_obj.get("name")) |v| {
                     if (v == .string) profile.name = try allocator.dupe(u8, v.string);
                 }
@@ -726,7 +726,7 @@ pub fn loadGameConfig(allocator: std.mem.Allocator, app_id: u32) !GameConfig {
                 if (profile_obj.get("target_monitor")) |v| {
                     if (v == .string) profile.target_monitor = try allocator.dupe(u8, v.string);
                 }
-                
+
                 // Parse resolution
                 const res_width = profile_obj.get("resolution_width");
                 const res_height = profile_obj.get("resolution_height");
@@ -743,7 +743,7 @@ pub fn loadGameConfig(allocator: std.mem.Allocator, app_id: u32) !GameConfig {
                         profile.resolution_override = res;
                     }
                 }
-                
+
                 if (profile_obj.get("enable_mangohud")) |v| {
                     if (v == .bool) profile.enable_mangohud = v.bool;
                 }
@@ -756,10 +756,10 @@ pub fn loadGameConfig(allocator: std.mem.Allocator, app_id: u32) !GameConfig {
                 if (profile_obj.get("create_steam_shortcut")) |v| {
                     if (v == .bool) profile.create_steam_shortcut = v.bool;
                 }
-                
+
                 profiles_list[i] = profile;
             }
-            
+
             config.profiles = profiles_list;
         }
     }
@@ -834,7 +834,7 @@ pub fn saveGameConfig(allocator: std.mem.Allocator, config: *const GameConfig) !
         try file.writeAll("    {\n");
         try file.writeAll(try std.fmt.bufPrint(&buf, "      \"name\": \"{s}\",\n", .{profile.name}));
         try file.writeAll(try std.fmt.bufPrint(&buf, "      \"gpu_preference\": \"{s}\",\n", .{@tagName(profile.gpu_preference)}));
-        
+
         if (profile.gpu_index) |idx| {
             try file.writeAll(try std.fmt.bufPrint(&buf, "      \"gpu_index\": {d},\n", .{idx}));
         }
@@ -858,7 +858,7 @@ pub fn saveGameConfig(allocator: std.mem.Allocator, config: *const GameConfig) !
             try file.writeAll(try std.fmt.bufPrint(&buf, "      \"enable_gamemode\": {s},\n", .{if (gm) "true" else "false"}));
         }
         try file.writeAll(try std.fmt.bufPrint(&buf, "      \"create_steam_shortcut\": {s}\n", .{if (profile.create_steam_shortcut) "true" else "false"}));
-        
+
         if (i < config.profiles.len - 1) {
             try file.writeAll("    },\n");
         } else {

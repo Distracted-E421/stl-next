@@ -305,18 +305,70 @@ Based on GitHub issues from `sonic2kk/steamtinkerlaunch`:
 3. Plugin system
 4. ProtonDB integration
 
-## 🚀 Phase 8: D-Bus Integration + Profiles (IN PROGRESS)
+## ✅ Phase 8: D-Bus Integration + GPU Selection (COMPLETE)
 
 **KILLER FEATURE for multi-GPU systems!**
 
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **GPU Selection** | switcheroo-control D-Bus for PRIME offload | 🔴 HIGH |
-| **Power Profiles** | Auto-switch to performance mode | 🔴 HIGH |
-| **Screen Saver Inhibit** | Prevent lock during gaming | 🟡 MEDIUM |
-| **Desktop Notifications** | Rich game launch/exit notifications | 🟡 MEDIUM |
-| **GameMode D-Bus** | Native D-Bus instead of library | 🟢 LOW |
-| **Session Inhibit** | Prevent accidental logout | 🟢 LOW |
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **GPU Detection** | Auto-detect GPUs via switcheroo-control or /sys/class/drm | ✅ |
+| **GPU Selection** | Per-game GPU preference (NVIDIA, Arc, AMD, discrete, etc.) | ✅ |
+| **Power Profiles** | Auto-switch to performance mode via D-Bus | ✅ |
+| **Screen Saver Inhibit** | Prevent lock during gaming | ✅ |
+| **Desktop Notifications** | Rich game launch/exit notifications | ✅ |
+| **Session Inhibit** | Prevent accidental logout | ✅ |
+
+### CLI Commands (Phase 8)
+
+```bash
+stl-next gpu             # Alias for gpu-list
+stl-next gpu-list        # List detected GPUs with details
+stl-next gpu-test [pref] # Test GPU env var generation
+stl-next session-test    # Show D-Bus session capabilities
+```
+
+## ✅ Phase 8.5: Launch Profiles (COMPLETE)
+
+**No more remembering launch options!**
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Profile Creation** | Save GPU, monitor, resolution, tinker settings | ✅ |
+| **Profile Persistence** | JSON config in ~/.config/stl-next/games/ | ✅ |
+| **--profile Flag** | Launch with specific profile | ✅ |
+| **Active Profile** | Set default profile per game | ✅ |
+| **Steam Shortcuts** | Binary VDF writing to shortcuts.vdf | ✅ |
+| **Flag Parsing** | --gpu, --monitor, --resolution, --mangohud | ✅ |
+
+### CLI Commands (Phase 8.5)
+
+```bash
+stl-next profile-create <AppID> <name> [--gpu X] [--monitor Y] [--resolution WxH@Hz]
+stl-next profile-list <AppID>           # List all profiles
+stl-next profile-set <AppID> <name>     # Set active profile
+stl-next profile-delete <AppID> <name>  # Remove a profile
+stl-next profile-shortcut <AppID> <name> # Create Steam library shortcut
+stl-next run <AppID> --profile <name>   # Launch with specific profile
+```
+
+### Example Workflow
+
+```bash
+# 1. Create profiles for different setups
+stl-next profile-create 413150 "Arc-1440p" --gpu arc --resolution 2560x1440@144 --mangohud
+stl-next profile-create 413150 "NVIDIA-4K" --gpu nvidia --resolution 3840x2160@60
+
+# 2. Set your preferred default
+stl-next profile-set 413150 "Arc-1440p"
+
+# 3. Create Steam shortcuts (appear in library!)
+stl-next profile-shortcut 413150 "Arc-1440p"
+stl-next profile-shortcut 413150 "NVIDIA-4K"
+
+# 4. Launch (uses default or specify profile)
+stl-next run 413150                       # Uses Arc-1440p (default)
+stl-next run 413150 --profile "NVIDIA-4K" # Uses NVIDIA-4K
+```
 
 ### Why D-Bus?
 
