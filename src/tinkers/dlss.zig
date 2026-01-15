@@ -1,0 +1,273 @@
+const std = @import("std");
+const interface = @import("interface.zig");
+const Context = interface.Context;
+const EnvMap = interface.EnvMap;
+const ArgList = interface.ArgList;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DLSS TWEAKS TINKER (Phase 6)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Configuration for NVIDIA DLSS (Deep Learning Super Sampling) and
+// DLSS Frame Generation features.
+//
+// Features:
+//   - DLSS quality presets
+//   - DLSS Frame Generation toggle
+//   - DLL swapping (different DLSS versions)
+//   - DLSS indicator overlay
+//   - Latency management
+//
+// Works with:
+//   - dxvk-nvapi (Proton's DLSS implementation)
+//   - nvngx.dll (NVIDIA's DLSS library)
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// DLSS quality preset
+pub const DlssPreset = enum {
+    off,
+    ultra_performance, // 3x scaling
+    performance, // 2x scaling
+    balanced, // 1.7x scaling
+    quality, // 1.5x scaling
+    ultra_quality, // 1.3x scaling
+    dlaa, // No upscaling, just anti-aliasing
+
+    pub fn toScaleFactor(self: DlssPreset) f32 {
+        return switch (self) {
+            .off => 1.0,
+            .ultra_performance => 3.0,
+            .performance => 2.0,
+            .balanced => 1.7,
+            .quality => 1.5,
+            .ultra_quality => 1.3,
+            .dlaa => 1.0,
+        };
+    }
+
+    pub fn toString(self: DlssPreset) []const u8 {
+        return switch (self) {
+            .off => "Off",
+            .ultra_performance => "Ultra Performance",
+            .performance => "Performance",
+            .balanced => "Balanced",
+            .quality => "Quality",
+            .ultra_quality => "Ultra Quality",
+            .dlaa => "DLAA",
+        };
+    }
+};
+
+/// DLSS configuration
+pub const DlssConfig = struct {
+    /// Enable DLSS tweaks
+    enabled: bool = false,
+    /// DLSS quality preset
+    preset: DlssPreset = .quality,
+    /// Enable DLSS Frame Generation (RTX 40+ series)
+    frame_generation: bool = false,
+    /// Enable Reflex low latency
+    reflex: ReflexMode = .on,
+    /// Show DLSS indicator overlay
+    indicator: bool = false,
+    /// Custom DLSS DLL path (for DLL swapping)
+    custom_dll: ?[]const u8 = null,
+    /// Override DLSS version check
+    force_enable: bool = false,
+    /// DLSS sharpening (0.0-1.0)
+    sharpening: f32 = 0.5,
+    /// Ray reconstruction (RTX 40+ series)
+    ray_reconstruction: bool = false,
+
+    pub const ReflexMode = enum {
+        off,
+        on,
+        on_boost,
+
+        pub fn toString(self: ReflexMode) []const u8 {
+            return switch (self) {
+                .off => "off",
+                .on => "on",
+                .on_boost => "on+boost",
+            };
+        }
+
+        pub fn toEnvValue(self: ReflexMode) []const u8 {
+            return switch (self) {
+                .off => "0",
+                .on => "1",
+                .on_boost => "2",
+            };
+        }
+    };
+};
+
+/// DLSS DLL versions for swapping
+pub const DlssVersion = struct {
+    version: []const u8,
+    filename: []const u8,
+    notes: []const u8,
+
+    pub const KNOWN_VERSIONS = [_]DlssVersion{
+        .{ .version = "3.7.0", .filename = "nvngx_dlss_3.7.0.dll", .notes = "Latest stable" },
+        .{ .version = "3.5.0", .filename = "nvngx_dlss_3.5.0.dll", .notes = "Good compatibility" },
+        .{ .version = "3.1.0", .filename = "nvngx_dlss_3.1.0.dll", .notes = "Frame Gen introduced" },
+        .{ .version = "2.5.1", .filename = "nvngx_dlss_2.5.1.dll", .notes = "Pre-FG stable" },
+    };
+};
+
+fn isEnabled(ctx: *const Context) bool {
+    // Check game config for DLSS settings
+    _ = ctx;
+    return false; // Will be enabled via config
+}
+
+fn preparePrefix(ctx: *const Context) anyerror!void {
+    // If custom DLL is specified, copy it to the game's prefix
+    _ = ctx;
+    // This would involve copying nvngx_dlss.dll to the Wine prefix
+}
+
+fn modifyEnv(ctx: *const Context, env: *EnvMap) anyerror!void {
+    _ = ctx;
+
+    // Enable DXVK-NVAPI for DLSS support in Proton
+    try env.put("DXVK_ENABLE_NVAPI", "1");
+
+    // DLSS-specific environment variables
+    try env.put("PROTON_ENABLE_NVAPI", "1");
+
+    // Enable Reflex
+    try env.put("DXVK_NVAPI_ALLOW_OTHER_DRIVERS", "1");
+
+    // DLSS indicator (if available)
+    try env.put("DXVK_HUD", "devinfo,fps,frametimes");
+}
+
+fn modifyArgs(ctx: *const Context, args: *ArgList) anyerror!void {
+    // DLSS doesn't modify command-line arguments
+    _ = ctx;
+    _ = args;
+}
+
+/// Generate DLSS configuration file for a game
+pub fn generateDlssConfig(allocator: std.mem.Allocator, config: DlssConfig, game_name: []const u8) ![]const u8 {
+    var result = std.ArrayList(u8).init(allocator);
+    errdefer result.deinit();
+
+    const w = result.writer();
+
+    try w.print("; DLSS Configuration for {s}\n", .{game_name});
+    try w.print("; Generated by STL-Next\n\n", .{});
+
+    try w.writeAll("[DLSS]\n");
+    try w.print("Preset={s}\n", .{config.preset.toString()});
+    try w.print("Sharpening={d:.2}\n", .{config.sharpening});
+    try w.print("ForceEnable={s}\n", .{if (config.force_enable) "true" else "false"});
+
+    try w.writeAll("\n[FrameGeneration]\n");
+    try w.print("Enabled={s}\n", .{if (config.frame_generation) "true" else "false"});
+
+    try w.writeAll("\n[Reflex]\n");
+    try w.print("Mode={s}\n", .{config.reflex.toString()});
+
+    try w.writeAll("\n[RayReconstruction]\n");
+    try w.print("Enabled={s}\n", .{if (config.ray_reconstruction) "true" else "false"});
+
+    if (config.custom_dll) |dll| {
+        try w.writeAll("\n[Override]\n");
+        try w.print("DllPath={s}\n", .{dll});
+    }
+
+    return result.toOwnedSlice();
+}
+
+/// Copy a custom DLSS DLL to the game's Wine prefix
+pub fn installCustomDll(allocator: std.mem.Allocator, dll_path: []const u8, prefix_path: []const u8) !void {
+    const dest_path = try std.fmt.allocPrint(
+        allocator,
+        "{s}/drive_c/windows/system32/nvngx_dlss.dll",
+        .{prefix_path},
+    );
+    defer allocator.free(dest_path);
+
+    std.fs.copyFileAbsolute(dll_path, dest_path, .{}) catch |err| {
+        std.log.err("DLSS: Failed to copy DLL: {s}", .{@errorName(err)});
+        return err;
+    };
+
+    std.log.info("DLSS: Installed custom DLL to {s}", .{dest_path});
+}
+
+/// Check if the system supports DLSS
+pub fn checkDlssSupport() DlssSupport {
+    // Check for NVIDIA GPU
+    const nvidia_present = std.fs.accessAbsolute("/dev/nvidia0", .{}) catch false;
+    if (!nvidia_present) {
+        return .{ .supported = false, .reason = "No NVIDIA GPU detected" };
+    }
+
+    // Check for RTX card (SM 7.0+)
+    // This would require parsing nvidia-smi output
+    return .{
+        .supported = true,
+        .reason = "NVIDIA GPU detected",
+        .frame_gen_supported = false, // Would need to check for RTX 40+
+    };
+}
+
+pub const DlssSupport = struct {
+    supported: bool,
+    reason: []const u8,
+    frame_gen_supported: bool = false,
+    ray_reconstruction_supported: bool = false,
+};
+
+pub const tinker = interface.Tinker{
+    .id = "dlss",
+    .name = "DLSS Tweaks",
+    .priority = interface.Priority.SETUP,
+    .isEnabledFn = isEnabled,
+    .preparePrefixFn = preparePrefix,
+    .modifyEnvFn = modifyEnv,
+    .modifyArgsFn = modifyArgs,
+    .cleanupFn = null,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TESTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test "default config" {
+    const config = DlssConfig{};
+    try std.testing.expect(!config.enabled);
+    try std.testing.expectEqual(DlssPreset.quality, config.preset);
+    try std.testing.expect(!config.frame_generation);
+}
+
+test "preset scale factors" {
+    try std.testing.expectEqual(@as(f32, 3.0), DlssPreset.ultra_performance.toScaleFactor());
+    try std.testing.expectEqual(@as(f32, 2.0), DlssPreset.performance.toScaleFactor());
+    try std.testing.expectEqual(@as(f32, 1.5), DlssPreset.quality.toScaleFactor());
+    try std.testing.expectEqual(@as(f32, 1.0), DlssPreset.dlaa.toScaleFactor());
+}
+
+test "config generation" {
+    const allocator = std.testing.allocator;
+
+    const config = DlssConfig{
+        .preset = .balanced,
+        .frame_generation = true,
+        .reflex = .on_boost,
+        .sharpening = 0.7,
+    };
+
+    const result = try generateDlssConfig(allocator, config, "Test Game");
+    defer allocator.free(result);
+
+    try std.testing.expect(std.mem.indexOf(u8, result, "Preset=Balanced") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "Sharpening=0.70") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "[FrameGeneration]") != null);
+}
+

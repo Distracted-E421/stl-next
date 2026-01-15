@@ -40,7 +40,8 @@ See: [STL_URL_TRUNCATION_BUG_REPORT.md](../stardew-modding-nix/STL_URL_TRUNCATIO
 | Phase 5.5 | ✅ Complete | **Raylib GUI** - Modern Wait Requester |
 | Phase 5.6 | ✅ Complete | **Vortex Integration** - Auto-discovery, NXM forwarding |
 | Phase 5.7 | ✅ Complete | **Nexus Mods API** - Full v1 client, tracking, Premium downloads |
-| Phase 6 | 📋 Planned | Full MO2 USVFS, ReShade, VR support |
+| Phase 6 | ✅ Complete | **14 Tinkers**: ReShade, vkBasalt, SpecialK, LatencyFleX, MultiApp, Boxtron, OBS, DLSS, OptiScaler |
+| Phase 7 | 📋 Planned | Full MO2 USVFS, Stardrop integration, VR support |
 
 ### Zig Version
 

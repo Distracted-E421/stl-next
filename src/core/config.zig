@@ -209,6 +209,123 @@ pub const AppClosePolicy = enum {
     ask_user,
 };
 
+/// Boxtron/Roberta (DOSBox/ScummVM) configuration
+pub const BoxtronConfig = struct {
+    /// Use Boxtron for DOS games
+    boxtron_enabled: bool = false,
+    /// Use Roberta for ScummVM games
+    roberta_enabled: bool = false,
+    /// Custom DOSBox config file
+    dosbox_config: ?[]const u8 = null,
+    /// DOSBox cycles (CPU speed)
+    cycles: ?u32 = null,
+    /// DOSBox fullscreen mode
+    fullscreen: bool = true,
+    /// DOSBox aspect correction
+    aspect_correction: bool = true,
+    /// DOSBox scaler
+    scaler: BoxtronScaler = .normal2x,
+
+    pub const BoxtronScaler = enum {
+        none,
+        normal2x,
+        normal3x,
+        hq2x,
+        hq3x,
+    };
+};
+
+/// OBS Studio capture integration
+pub const ObsConfig = struct {
+    /// Enable OBS integration
+    enabled: bool = false,
+    /// Auto-start recording when game launches
+    auto_record: bool = false,
+    /// Auto-start streaming when game launches
+    auto_stream: bool = false,
+    /// Switch to a specific scene for this game
+    game_scene: ?[]const u8 = null,
+    /// OBS websocket port
+    websocket_port: u16 = 4455,
+    /// Delay before starting recording (ms)
+    start_delay_ms: u32 = 2000,
+    /// Stop recording when game exits
+    stop_on_exit: bool = true,
+    /// Use replay buffer instead of recording
+    use_replay_buffer: bool = false,
+};
+
+/// DLSS Tweaks configuration
+pub const DlssConfig = struct {
+    /// Enable DLSS tweaks
+    enabled: bool = false,
+    /// DLSS quality preset
+    preset: DlssPreset = .quality,
+    /// Enable DLSS Frame Generation (RTX 40+ series)
+    frame_generation: bool = false,
+    /// Enable Reflex low latency
+    reflex: DlssReflexMode = .on,
+    /// Show DLSS indicator overlay
+    indicator: bool = false,
+    /// Custom DLSS DLL path (for DLL swapping)
+    custom_dll: ?[]const u8 = null,
+    /// DLSS sharpening (0.0-1.0)
+    sharpening: f32 = 0.5,
+    /// Ray reconstruction (RTX 40+ series)
+    ray_reconstruction: bool = false,
+
+    pub const DlssPreset = enum {
+        off,
+        ultra_performance,
+        performance,
+        balanced,
+        quality,
+        ultra_quality,
+        dlaa,
+    };
+
+    pub const DlssReflexMode = enum {
+        off,
+        on,
+        on_boost,
+    };
+};
+
+/// OptiScaler configuration (universal upscaler)
+pub const OptiScalerConfig = struct {
+    /// Enable OptiScaler
+    enabled: bool = false,
+    /// Upscaler backend to use
+    backend: OptiScalerBackend = .auto,
+    /// Enable frame generation
+    frame_generation: bool = true,
+    /// FSR quality preset
+    fsr_quality: FsrQuality = .quality,
+    /// Sharpening amount (0.0-1.0)
+    sharpening: f32 = 0.5,
+    /// Anti-lag mode
+    anti_lag: bool = true,
+    /// Override game's native upscaler
+    override_native: bool = true,
+    /// Enable debug overlay
+    debug_overlay: bool = false,
+
+    pub const OptiScalerBackend = enum {
+        fsr31,
+        xess,
+        dlss,
+        auto,
+    };
+
+    pub const FsrQuality = enum {
+        ultra_performance,
+        performance,
+        balanced,
+        quality,
+        ultra_quality,
+    };
+};
+
 /// Proton/Wine advanced configuration
 pub const ProtonAdvancedConfig = struct {
     /// Enable Proton's native Wayland support
@@ -261,6 +378,10 @@ pub const GameConfig = struct {
     specialk: SpecialkConfig = .{},
     latencyflex: LatencyflexConfig = .{},
     multiapp: MultiappConfig = .{},
+    boxtron: BoxtronConfig = .{},
+    obs: ObsConfig = .{},
+    dlss: DlssConfig = .{},
+    optiscaler: OptiScalerConfig = .{},
 
     // Proton/Wine advanced settings
     proton_advanced: ProtonAdvancedConfig = .{},

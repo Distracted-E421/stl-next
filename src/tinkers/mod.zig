@@ -1,4 +1,4 @@
-//! Tinker Module System (Phase 6 - Full Featured)
+//! Tinker Module System (Phase 6 - Complete)
 //!
 //! No global state! All tinkers read config from Context.
 //!
@@ -12,6 +12,10 @@
 //!   - SpecialK (HDR, frame pacing)
 //!   - LatencyFleX (low-latency gaming)
 //!   - MultiApp (helper app launcher)
+//!   - Boxtron/Roberta (DOSBox/ScummVM)
+//!   - OBS Capture (streaming integration)
+//!   - DLSS Tweaks (NVIDIA upscaling)
+//!   - OptiScaler (universal frame generation)
 
 const std = @import("std");
 
@@ -36,6 +40,10 @@ pub const vkbasalt = @import("vkbasalt.zig");
 pub const specialk = @import("specialk.zig");
 pub const latencyflex = @import("latencyflex.zig");
 pub const multiapp = @import("multiapp.zig");
+pub const boxtron = @import("boxtron.zig");
+pub const obs = @import("obs.zig");
+pub const dlss = @import("dlss.zig");
+pub const optiscaler = @import("optiscaler.zig");
 
 /// Initialize a registry with all built-in tinkers
 pub fn initBuiltinRegistry(allocator: std.mem.Allocator) !TinkerRegistry {
@@ -56,6 +64,10 @@ pub fn initBuiltinRegistry(allocator: std.mem.Allocator) !TinkerRegistry {
     try registry.register(&specialk.specialk_tinker);
     try registry.register(&latencyflex.latencyflex_tinker);
     try registry.register(&multiapp.multiapp_tinker);
+    try registry.register(&boxtron.tinker);
+    try registry.register(&obs.tinker);
+    try registry.register(&dlss.tinker);
+    try registry.register(&optiscaler.tinker);
 
     std.log.info("Tinker Registry: {d} tinkers available", .{registry.tinkers.items.len});
 
@@ -76,6 +88,10 @@ pub const builtin_tinker_ids = [_][]const u8{
     "specialk",
     "latencyflex",
     "multiapp",
+    "boxtron",
+    "obs",
+    "dlss",
+    "optiscaler",
 };
 
 /// Re-export commonly used types
@@ -98,9 +114,15 @@ pub const LatencyflexMode = latencyflex.LatencyflexMode;
 pub const MultiappConfig = multiapp.MultiappConfig;
 pub const HelperApp = multiapp.HelperApp;
 pub const MultiappPresets = multiapp.Presets;
+pub const BoxtronConfig = boxtron.BoxtronConfig;
+pub const ObsConfig = obs.ObsConfig;
+pub const DlssConfig = dlss.DlssConfig;
+pub const DlssPreset = dlss.DlssPreset;
+pub const OptiScalerConfig = optiscaler.OptiScalerConfig;
+pub const UpscalerBackend = optiscaler.UpscalerBackend;
 
 test "registry initialization" {
     var registry = try initBuiltinRegistry(std.testing.allocator);
     defer registry.deinit();
-    try std.testing.expectEqual(@as(usize, 10), registry.tinkers.items.len);
+    try std.testing.expectEqual(@as(usize, 14), registry.tinkers.items.len);
 }

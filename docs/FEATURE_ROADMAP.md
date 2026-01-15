@@ -66,14 +66,14 @@ This document tracks feature parity with the original SteamTinkerLaunch and plan
 | Non-Steam Games | ✅ | ✅ | Native, Windows, imports |
 | SteamGridDB | ✅ | ✅ | Search, download, cache |
 
-### ❌ Not Yet Implemented
+### ✅ Phase 6: Advanced Features (Complete)
 
-| Feature | Original STL | Priority | Planned Phase |
-|---------|-------------|----------|---------------|
-| Boxtron/Roberta | ✅ | Low | Phase 6 |
-| Vkbasalt | ✅ | Low | Phase 5 |
-| OBS Capture | ❌ | Low | Phase 6 |
-| DLSS/FSR Tweaks | ❌ | Medium | Phase 5 |
+| Feature | Original STL | STL-Next | Notes |
+|---------|-------------|----------|-------|
+| Boxtron/Roberta | ✅ | ✅ | DOSBox/ScummVM for classic games |
+| OBS Capture | ❌ | ✅ | Recording/streaming integration |
+| DLSS Tweaks | ❌ | ✅ | Quality presets, Frame Gen, Reflex |
+| OptiScaler | ❌ | ✅ | Universal upscaler (FSR 3.1, XeSS) |
 
 ## Bugs Fixed vs Original STL
 

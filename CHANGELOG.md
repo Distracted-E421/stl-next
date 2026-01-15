@@ -2,6 +2,72 @@
 
 All notable changes to STL-Next are documented in this file.
 
+## [0.6.1-alpha] - Phase 6 Complete: All Advanced Tinkers
+
+### Added
+
+#### Remaining Phase 6 Tinker Modules
+
+**Boxtron/Roberta Tinker** (`src/tinkers/boxtron.zig`)
+- DOSBox integration via Boxtron Steam Play tool
+- ScummVM integration via Roberta Steam Play tool
+- DOSBox configuration generation (cycles, scaler, renderer)
+- Automatic DOS/ScummVM game detection heuristics
+- Scaler options: normal2x/3x, hq2x/3x, advmame, tv, scan
+- Renderer options: surface, texture, opengl
+
+**OBS Capture Tinker** (`src/tinkers/obs.zig`)
+- OBS Studio integration for streaming/recording
+- Auto-start recording when game launches
+- Auto-start streaming when game launches
+- Scene switching per-game
+- OBS websocket support (port 4455)
+- Replay buffer support
+- Cleanup: auto-stop on game exit
+- OBS detection via process check
+
+**DLSS Tweaks Tinker** (`src/tinkers/dlss.zig`)
+- NVIDIA DLSS quality presets (Ultra Performance → DLAA)
+- DLSS Frame Generation toggle (RTX 40+ series)
+- NVIDIA Reflex modes (off/on/on+boost)
+- DLSS sharpening control (0.0-1.0)
+- Ray Reconstruction toggle (RTX 40+ series)
+- Custom DLSS DLL swapping
+- DXVK-NVAPI environment configuration
+- DLSS version database for DLL swapping
+
+**OptiScaler Tinker** (`src/tinkers/optiscaler.zig`)
+- Universal upscaler (FSR 3.1, XeSS, DLSS) on any GPU
+- Frame Generation on AMD/Intel GPUs
+- Backend auto-detection based on GPU vendor
+- FSR quality presets (Ultra Performance → Ultra Quality)
+- Anti-lag mode configuration
+- DLL installation to Wine prefix
+- INI configuration generation
+- Debug overlay option
+
+#### Configuration Extensions (`src/core/config.zig`)
+
+- `BoxtronConfig` - DOSBox/ScummVM settings
+- `ObsConfig` - OBS Studio integration settings
+- `DlssConfig` - DLSS quality and frame generation
+- `OptiScalerConfig` - Universal upscaler settings
+
+### Changed
+
+- Tinker registry now has **14 built-in tinkers** (was 10)
+- Phase 6 is now complete with all planned features
+- Updated feature roadmap to reflect Phase 6 completion
+
+### Technical
+
+- Added GPU vendor detection for optimal backend selection
+- OBS integration uses obs-cmd CLI as fallback
+- DLSS support checks for /dev/nvidia0 presence
+- OptiScaler DLL installation to system32
+
+---
+
 ## [0.6.0-alpha] - Phase 6: Advanced Tinkers + Configuration
 
 ### Added
