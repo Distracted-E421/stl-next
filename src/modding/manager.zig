@@ -1,4 +1,5 @@
 const std = @import("std");
+pub const vortex = @import("vortex.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MOD MANAGER INTEGRATION (Phase 4 - Hardened)
@@ -8,6 +9,11 @@ const std = @import("std");
 // where forward slashes in NXM URLs were stripped by Wine's command parsing.
 //
 // We handle ALL URL encoding/escaping properly to avoid such issues.
+//
+// Supports:
+//   - Vortex (via Wine/Proton)
+//   - MO2 (via Wine/Proton)
+//   - Direct NXM download handling
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 
