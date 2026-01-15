@@ -15,13 +15,20 @@ pub const LaunchResult = struct {
     setup_time_ms: f64,
     error_msg: ?[]const u8 = null,
     allocator: std.mem.Allocator,
+    /// Whether this result owns the command strings (should free them)
+    owns_strings: bool = false,
     
     pub fn deinit(self: *const LaunchResult) void {
-        // Free each command string if allocated
-        for (self.command) |cmd| {
-            self.allocator.free(cmd);
+        // Only free inner strings if we duplicated them
+        if (self.owns_strings) {
+            for (self.command) |cmd| {
+                self.allocator.free(cmd);
+            }
         }
-        self.allocator.free(self.command);
+        // Always free the outer slice
+        if (self.command.len > 0) {
+            self.allocator.free(self.command);
+        }
     }
 };
 
@@ -170,6 +177,7 @@ pub fn launch(
             .env_count = env.count(),
             .setup_time_ms = setup_time_ms,
             .allocator = allocator,
+            .owns_strings = false, // Strings are borrowed from args, game_info, etc.
         };
     }
 
@@ -212,6 +220,7 @@ pub fn launch(
         .env_count = env.count(),
         .setup_time_ms = setup_time_ms,
         .allocator = allocator,
+        .owns_strings = false, // Strings are borrowed from args, game_info, etc.
     };
 }
 

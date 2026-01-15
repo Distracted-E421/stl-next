@@ -341,8 +341,9 @@ pub fn main() !void {
 fn runGame(allocator: std.mem.Allocator, app_id: u32, extra_args: []const []const u8) !void {
     var timer = try std.time.Timer.start();
 
-    // Parse --profile flag from extra_args
+    // Parse --profile and --dry-run flags from extra_args
     var profile_name: ?[]const u8 = null;
+    var dry_run: bool = false;
     var filtered_args: std.ArrayListUnmanaged([]const u8) = .{};
     defer filtered_args.deinit(allocator);
 
@@ -353,6 +354,8 @@ fn runGame(allocator: std.mem.Allocator, app_id: u32, extra_args: []const []cons
                 profile_name = extra_args[i + 1];
                 i += 1; // Skip the profile name
             }
+        } else if (std.mem.eql(u8, extra_args[i], "--dry-run")) {
+            dry_run = true;
         } else {
             try filtered_args.append(allocator, extra_args[i]);
         }
@@ -387,6 +390,7 @@ fn runGame(allocator: std.mem.Allocator, app_id: u32, extra_args: []const []cons
         std.log.warn("No custom config for AppID {d}, using defaults: {}", .{ app_id, err });
         break :blk config.GameConfig.defaults(app_id);
     };
+    defer game_config.deinit();
 
     // If --profile was specified, use that; otherwise use active_profile
     const effective_profile_name = profile_name orelse game_config.active_profile;
@@ -420,7 +424,7 @@ fn runGame(allocator: std.mem.Allocator, app_id: u32, extra_args: []const []cons
     std.log.info("Setup completed in {d:.2}ms", .{@as(f64, @floatFromInt(setup_time)) / std.time.ns_per_ms});
 
     // Pass profile name to launcher (will be used to apply GPU env vars)
-    const result = try launchWithProfile(allocator, &steam_engine, app_id, filtered_args.items, &game_config, effective_profile_name, false);
+    const result = try launchWithProfile(allocator, &steam_engine, app_id, filtered_args.items, &game_config, effective_profile_name, dry_run);
     defer result.deinit();
 
     if (!result.success) {
@@ -1146,6 +1150,7 @@ fn runWaitRequester(allocator: std.mem.Allocator, app_id: u32) !void {
     std.log.info("Game: {s}", .{game_info.name});
 
     var game_config = config.loadGameConfig(allocator, app_id) catch config.GameConfig.defaults(app_id);
+    defer game_config.deinit();
 
     var requester = try ui.WaitRequester.init(allocator, app_id, game_info.name, &game_config);
     defer requester.deinit();
@@ -1234,7 +1239,9 @@ fn removeNonSteamGame(allocator: std.mem.Allocator, id: i32) !void {
     defer manager.deinit();
 
     if (manager.getGame(id)) |game| {
-        const name = game.name;
+        // Copy the name before removing (removeGame frees the original)
+        const name = try allocator.dupe(u8, game.name);
+        defer allocator.free(name);
         try manager.removeGame(id);
         compat.print("Removed non-Steam game: {s}\n", .{name});
     } else {
@@ -1916,11 +1923,12 @@ fn printProfileHelp() void {
 }
 
 fn profileList(allocator: std.mem.Allocator, app_id: u32) !void {
-    const game_config = config.loadGameConfig(allocator, app_id) catch |err| {
+    var game_config = config.loadGameConfig(allocator, app_id) catch |err| {
         compat.print("No configuration found for AppID {d}: {s}\n", .{ app_id, @errorName(err) });
         compat.print("Create a profile with: stl-next profile-create {d} \"Profile Name\"\n", .{app_id});
         return;
     };
+    defer game_config.deinit();
 
     compat.print("Profiles for {s} (AppID: {d})\n", .{ game_config.name, app_id });
     compat.print("================================\n\n", .{});
@@ -2053,6 +2061,8 @@ fn profileCreate(allocator: std.mem.Allocator, app_id: u32, name: []const u8, ex
     };
 
     // Load existing config or create new
+    // Note: We don't defer deinit here because ownership transfers to mutable_config
+    // and the program exits shortly after anyway
     const game_config = config.loadGameConfig(allocator, app_id) catch config.GameConfig.defaults(app_id);
 
     compat.print("Creating profile \"{s}\" for AppID {d}...\n\n", .{ name, app_id });
@@ -2137,6 +2147,9 @@ fn profileSet(allocator: std.mem.Allocator, app_id: u32, profile_name: []const u
         compat.print("No configuration found for AppID {d}\n", .{app_id});
         return;
     };
+    // Note: We don't defer deinit here because we modify active_profile
+    // to point to profile_name (a borrowed string), which would cause
+    // an invalid free. The program exits shortly after anyway.
 
     // Check if profile exists
     if (game_config.getProfile(profile_name)) |_| {
@@ -2169,6 +2182,7 @@ fn profileDelete(allocator: std.mem.Allocator, app_id: u32, profile_name: []cons
         compat.print("No configuration found for AppID {d}\n", .{app_id});
         return;
     };
+    defer game_config.deinit();
 
     game_config.removeProfile(allocator, profile_name) catch |err| {
         switch (err) {
@@ -2190,10 +2204,11 @@ fn profileDelete(allocator: std.mem.Allocator, app_id: u32, profile_name: []cons
 }
 
 fn profileCreateShortcut(allocator: std.mem.Allocator, app_id: u32, profile_name: []const u8) !void {
-    const game_config = config.loadGameConfig(allocator, app_id) catch {
+    var game_config = config.loadGameConfig(allocator, app_id) catch {
         compat.print("No configuration found for AppID {d}\n", .{app_id});
         return;
     };
+    defer game_config.deinit();
 
     if (game_config.getProfile(profile_name)) |profile| {
         compat.print(

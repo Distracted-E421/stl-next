@@ -1,6 +1,6 @@
 # STL-Next: Steam Tinker Launch - Next Generation
 
-A high-performance Steam game wrapper written in Zig, replacing the 21,000-line Bash script.
+A high-performance Steam game wrapper written in Zig, hoping to replace the original [SteamTinkerLaunch](https://github.com/sonic2kk/steamtinkerlaunch).
 
 ## 🎯 Why This Fork Exists
 
@@ -347,7 +347,5 @@ See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for code structure.
 MIT
 
 ---
-
-**Core Principle**: Performance-first. Sub-100ms overhead for any operation.
 
 **Why STL-Next?** Because bugs like [the NXM URL truncation](docs/NXM_HANDLING.md) shouldn't sit unfixed for 6+ months.

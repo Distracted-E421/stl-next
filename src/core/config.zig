@@ -449,8 +449,39 @@ pub const GameConfig = struct {
     // Artwork configuration
     steamgriddb: SteamGridDBConfig = .{},
 
+    /// Whether this config was loaded from disk (vs default) - determines if we need to free strings
+    _loaded_from_disk: bool = false,
+    /// Allocator used when loading (null for defaults)
+    _allocator: ?std.mem.Allocator = null,
+
     pub fn defaults(app_id: u32) GameConfig {
         return .{ .app_id = app_id };
+    }
+
+    /// Clean up allocated memory (call when done with a loaded config)
+    pub fn deinit(self: *GameConfig) void {
+        const allocator = self._allocator orelse return;
+        if (!self._loaded_from_disk) return;
+
+        // Free allocated strings - all strings in a loaded config are heap-allocated
+        // because loadGameConfig uses allocator.dupe() for all string values
+        allocator.free(self.active_profile);
+        if (self.proton_version) |v| allocator.free(v);
+        if (self.launch_options) |v| allocator.free(v);
+        allocator.free(self.mangohud.position);
+
+        // Free profiles array and profile strings
+        // When loaded from disk, profiles is always a heap-allocated array
+        for (self.profiles) |profile| {
+            allocator.free(profile.name);
+            if (profile.target_monitor) |m| allocator.free(m);
+            if (profile.description) |d| allocator.free(d);
+            if (profile.extra_launch_options) |o| allocator.free(o);
+            if (profile.proton_override) |p| allocator.free(p);
+        }
+        if (self.profiles.len > 0) {
+            allocator.free(self.profiles);
+        }
     }
 
     /// Get the currently active profile
@@ -763,6 +794,10 @@ pub fn loadGameConfig(allocator: std.mem.Allocator, app_id: u32) !GameConfig {
             config.profiles = profiles_list;
         }
     }
+
+    // Mark as loaded from disk so deinit knows to free
+    config._loaded_from_disk = true;
+    config._allocator = allocator;
 
     std.log.info("Config: Loaded for AppID {d}", .{app_id});
     return config;
