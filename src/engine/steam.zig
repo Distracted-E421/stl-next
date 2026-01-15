@@ -155,18 +155,82 @@ pub const SteamEngine = struct {
         var dir = std.fs.openDirAbsolute(install_dir, .{ .iterate = true }) catch return null;
         defer dir.close();
         
-        var iter = dir.iterate();
-        while (try iter.next()) |entry| {
-            if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".exe")) {
-                if (std.mem.indexOf(u8, entry.name, "UnityCrashHandler") != null) continue;
-                if (std.mem.indexOf(u8, entry.name, "unins") != null) continue;
-                
-                return try std.fmt.allocPrint(
-                    self.allocator, "{s}/{s}", .{ install_dir, entry.name },
-                );
+        // Get the folder name as potential game name (e.g., "Stardew Valley")
+        const folder_name = std.fs.path.basename(install_dir);
+        
+        // Phase 1: Look for native Linux executable (no extension, matching folder name)
+        {
+            var iter = dir.iterate();
+            while (try iter.next()) |entry| {
+                if (entry.kind != .file) continue;
+                // Skip files with extensions (these are likely Windows files or libraries)
+                if (std.mem.indexOf(u8, entry.name, ".") != null) continue;
+                // Check if it's likely an executable (matches folder name)
+                if (std.mem.eql(u8, entry.name, folder_name)) {
+                    return try std.fmt.allocPrint(
+                        self.allocator, "{s}/{s}", .{ install_dir, entry.name },
+                    );
+                }
+            }
+        }
+        
+        // Phase 2: Look for .exe that matches game name
+        dir = std.fs.openDirAbsolute(install_dir, .{ .iterate = true }) catch return null;
+        {
+            var iter = dir.iterate();
+            while (try iter.next()) |entry| {
+                if (entry.kind != .file) continue;
+                if (!std.mem.endsWith(u8, entry.name, ".exe")) continue;
+                // Skip known non-game executables
+                if (isNonGameExecutable(entry.name)) continue;
+                // Prefer exe matching folder name
+                const name_without_ext = entry.name[0..entry.name.len - 4];
+                if (std.mem.eql(u8, name_without_ext, folder_name)) {
+                    return try std.fmt.allocPrint(
+                        self.allocator, "{s}/{s}", .{ install_dir, entry.name },
+                    );
+                }
+            }
+        }
+        
+        // Phase 3: Fallback - any valid .exe
+        dir = std.fs.openDirAbsolute(install_dir, .{ .iterate = true }) catch return null;
+        {
+            var iter = dir.iterate();
+            while (try iter.next()) |entry| {
+                if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".exe")) {
+                    if (isNonGameExecutable(entry.name)) continue;
+                    return try std.fmt.allocPrint(
+                        self.allocator, "{s}/{s}", .{ install_dir, entry.name },
+                    );
+                }
             }
         }
         return null;
+    }
+    
+    fn isNonGameExecutable(name: []const u8) bool {
+        // Known non-game executables to skip
+        const skip_list = [_][]const u8{
+            "UnityCrashHandler",
+            "unins",
+            "createdump",
+            "crashhandler",
+            "CrashReporter",
+            "Reporter",
+            "Launcher", // Usually not the main game
+            "Setup",
+            "Config",
+            "RedistInstaller",
+            "vcredist",
+            "dxsetup",
+            "dotnet",
+        };
+        
+        for (skip_list) |skip| {
+            if (std.ascii.indexOfIgnoreCase(name, skip) != null) return true;
+        }
+        return false;
     }
 
     fn getGameNameFromManifest(self: *Self, app_id: u32) ![]const u8 {

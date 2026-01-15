@@ -103,7 +103,16 @@ pub fn launch(
     var args: std.ArrayList([]const u8) = .{};
     defer args.deinit(allocator);
 
-    if (game_config.use_native or game_info.proton_version == null) {
+    // Check for STL_NEXT_OVERRIDE_EXE (used by proton wrapper for SMAPI, etc.)
+    const override_exe = env.get("STL_NEXT_OVERRIDE_EXE");
+    
+    if (override_exe) |exe| {
+        // Use the override executable (e.g., SMAPI for modded Stardew Valley)
+        std.log.info("Using override executable: {s}", .{exe});
+        try args.append(allocator, exe);
+        // Remove from env so child process doesn't see it
+        env.remove("STL_NEXT_OVERRIDE_EXE");
+    } else if (game_config.use_native or game_info.proton_version == null) {
         const executable = game_info.executable orelse {
             return LaunchResult{
                 .success = false,
