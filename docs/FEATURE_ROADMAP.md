@@ -31,14 +31,19 @@ This document tracks feature parity with the original SteamTinkerLaunch and plan
 | SpecialK | ✅ | ❌ Phase 5 | Planned |
 | GUI | ✅ (yad) | ❌ Phase 5 | Raylib planned |
 
+### ✅ Now Implemented (Phase 4.5)
+
+| Feature | Original STL | STL-Next | Notes |
+|---------|-------------|----------|-------|
+| Winetricks | ✅ | ✅ | Full tinker with verb presets |
+| Custom Commands | ✅ | ✅ | Pre/post launch, env vars |
+| Non-Steam Games | ✅ | ✅ | Native, Windows, imports |
+| SteamGridDB | ✅ | ✅ | Search, download, cache |
+
 ### ❌ Not Yet Implemented
 
 | Feature | Original STL | Priority | Planned Phase |
 |---------|-------------|----------|---------------|
-| Winetricks | ✅ | High | Phase 5 |
-| Custom Commands | ✅ | High | Phase 5 |
-| Non-Steam Games | ✅ | Medium | Phase 5 |
-| SteamGridDB | ✅ | Medium | Phase 6 |
 | Boxtron/Roberta | ✅ | Low | Phase 6 |
 | Vkbasalt | ✅ | Low | Phase 5 |
 | OBS Capture | ❌ | Low | Phase 6 |
@@ -228,9 +233,9 @@ Based on GitHub issues from `sonic2kk/steamtinkerlaunch`:
 
 ### Short-term (Phase 5.5)
 
-1. Winetricks integration
-2. Custom commands
-3. Non-Steam games
+1. ~~Winetricks integration~~ ✅ Done
+2. ~~Custom commands~~ ✅ Done
+3. ~~Non-Steam games~~ ✅ Done
 4. Multi-app launch
 
 ### Medium-term (Phase 6)
@@ -238,7 +243,8 @@ Based on GitHub issues from `sonic2kk/steamtinkerlaunch`:
 1. DLSS/OptiScaler
 2. LatencyFleX
 3. VKDeviceChooser
-4. Config sharing
+4. ~~SteamGridDB~~ ✅ Done
+5. Config sharing
 
 ### Long-term (Future)
 

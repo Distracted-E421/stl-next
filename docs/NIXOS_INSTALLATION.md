@@ -2,9 +2,9 @@
 
 This guide covers installation and configuration of STL-Next specifically for NixOS systems. NixOS has unique characteristics that require special handling.
 
-## Why NixOS Needs Special Instructions
+## Why NixOS Needs (and deserves) Special Instructions
 
-NixOS differs from traditional Linux distributions in several key ways:
+NixOS (for user's that somehow missed the memo on the box) differs from traditional Linux distributions in several key ways:
 
 1. **Immutable filesystem**: `/usr/bin`, `/lib` etc. are read-only
 2. **Nix store paths**: All software lives in `/nix/store/`
@@ -12,7 +12,7 @@ NixOS differs from traditional Linux distributions in several key ways:
 4. **Declarative configuration**: System state defined in `.nix` files
 5. **Reproducibility**: Same config = same system
 
-STL-Next is designed with NixOS in mind from the start, unlike the original STL which required numerous workarounds.
+As an avid Nix enjoyer, I get very fed up being a second class citizen in an already second class ecosystem to many (feels bad man). Therefore, STL-Next is designed with NixOS in mind from the start, and as a first class citizen.
 
 ---
 
@@ -247,15 +247,17 @@ nix develop  # Activates the dev shell with all deps
 
 **Symptom**: STL-Next not appearing in compatibility tools
 
-**Solution**: 
+**Solution**:
 
 1. Check installation location:
+
 ```bash
 ls ~/.local/share/Steam/compatibilitytools.d/
 # Should contain stl-next/
 ```
 
-2. For system install, use `extraCompatPackages`:
+1. For system install, use `extraCompatPackages`:
+
 ```nix
 programs.steam.extraCompatPackages = [ pkgs.stl-next ];
 ```
@@ -265,6 +267,7 @@ programs.steam.extraCompatPackages = [ pkgs.stl-next ];
 **Symptom**: Daemon can't create socket
 
 **Solution**: Check `XDG_RUNTIME_DIR`:
+
 ```bash
 echo $XDG_RUNTIME_DIR
 # Should be /run/user/1000 or similar
@@ -278,6 +281,7 @@ export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 **Symptom**: STL-Next can't find Proton installations
 
 **Solution**: Check Steam library paths:
+
 ```bash
 stl-next list-proton
 
@@ -291,6 +295,7 @@ ls ~/.steam/steam/steamapps/common/
 **Symptom**: MangoHud/gamemoderun not found
 
 **Solution**: Add packages to system:
+
 ```nix
 environment.systemPackages = with pkgs; [
   mangohud
@@ -433,4 +438,3 @@ cat ~/.local/share/stl-next/logs/latest.log
 - [NixOS Wiki - Steam](https://wiki.nixos.org/wiki/Steam)
 - [Nix Packages - Proton](https://search.nixos.org/packages?query=proton)
 - [STL-Next Documentation](./README.md)
-

@@ -2,12 +2,21 @@ const std = @import("std");
 const fs = std.fs;
 const json = std.json;
 
+// Import tinker configs
+const winetricks = @import("../tinkers/winetricks.zig");
+const customcmd = @import("../tinkers/customcmd.zig");
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// CONFIG: Game Configuration Management (Phase 3.5 - Hardened)
+// CONFIG: Game Configuration Management (Phase 4.5 - Extended)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // Uses proper std.json parsing instead of string searching.
 // Configs are passed through Context, not global state.
+//
+// Phase 4.5 additions:
+//   - Winetricks configuration
+//   - Custom commands (pre/post launch)
+//   - SteamGridDB settings
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -46,15 +55,44 @@ pub const GameModeConfig = struct {
     renice: i8 = 0,
 };
 
+/// Winetricks configuration (re-exported from tinker)
+pub const WinetricksConfig = winetricks.WinetricksConfig;
+
+/// Custom commands configuration (re-exported from tinker)
+pub const CustomCommandsConfig = customcmd.CustomCommandsConfig;
+
+/// SteamGridDB configuration
+pub const SteamGridDBConfig = struct {
+    /// Enable automatic artwork fetching
+    enabled: bool = false,
+    /// Prefer animated images
+    prefer_animated: bool = false,
+    /// Preferred grid style
+    grid_style: []const u8 = "alternate",
+    /// Preferred hero style
+    hero_style: []const u8 = "blurred",
+    /// Download on first launch
+    auto_download: bool = true,
+    /// SteamGridDB game ID (for non-Steam games)
+    game_id: ?u32 = null,
+};
+
 /// Complete game configuration
 pub const GameConfig = struct {
     app_id: u32,
     use_native: bool = false,
     proton_version: ?[]const u8 = null,
     launch_options: ?[]const u8 = null,
+    
+    // Tinker configurations
     mangohud: MangoHudConfig = .{},
     gamescope: GamescopeConfig = .{},
     gamemode: GameModeConfig = .{},
+    winetricks: WinetricksConfig = .{},
+    custom_commands: CustomCommandsConfig = .{},
+    
+    // Artwork configuration
+    steamgriddb: SteamGridDBConfig = .{},
 
     pub fn defaults(app_id: u32) GameConfig {
         return .{ .app_id = app_id };

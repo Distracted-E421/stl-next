@@ -23,6 +23,8 @@ const builtin = @import("builtin");
 const vdf = @import("engine/vdf.zig");
 const steam = @import("engine/steam.zig");
 const appinfo = @import("engine/appinfo.zig");
+const nonsteam = @import("engine/nonsteam.zig");
+const steamgriddb = @import("engine/steamgriddb.zig");
 const config = @import("core/config.zig");
 const launcher = @import("core/launcher.zig");
 const ipc = @import("ipc/mod.zig");
@@ -33,7 +35,7 @@ pub const std_options = std.Options{
     .log_level = if (builtin.mode == .Debug) .debug else .info,
 };
 
-const VERSION = "0.4.0-alpha";
+const VERSION = "0.5.0-alpha";
 
 const Command = enum {
     run,
@@ -44,9 +46,17 @@ const Command = enum {
     configure,
     install,
     benchmark,
-    wait,       // Phase 4: Run wait requester
-    nxm,        // Phase 4: Handle NXM link
-    tui,        // Phase 4: Run TUI client
+    wait,           // Phase 4: Run wait requester
+    nxm,            // Phase 4: Handle NXM link
+    tui,            // Phase 4: Run TUI client
+    // Phase 4.5: Non-Steam games
+    add_game,
+    remove_game,
+    list_nonsteam,
+    import_heroic,
+    // Phase 4.5: SteamGridDB
+    artwork,
+    search_game,
     version,
     help,
 };
@@ -139,6 +149,39 @@ pub fn main() !void {
             }
             const app_id = try std.fmt.parseInt(u32, args[2], 10);
             try runTuiClient(allocator, app_id);
+        },
+        // Phase 4.5: Non-Steam game management
+        .add_game => {
+            if (args.len < 4) {
+                std.log.err("Usage: stl-next add-game <name> <executable> [--windows|--native]", .{});
+                return;
+            }
+            try addNonSteamGame(allocator, args[2], args[3], args[4..]);
+        },
+        .remove_game => {
+            if (args.len < 3) {
+                std.log.err("Usage: stl-next remove-game <id>", .{});
+                return;
+            }
+            const id = try std.fmt.parseInt(i32, args[2], 10);
+            try removeNonSteamGame(allocator, id);
+        },
+        .list_nonsteam => try listNonSteamGames(allocator),
+        .import_heroic => try importHeroicGames(allocator),
+        // Phase 4.5: SteamGridDB
+        .artwork => {
+            if (args.len < 3) {
+                std.log.err("Usage: stl-next artwork <AppID|GameName>", .{});
+                return;
+            }
+            try fetchArtwork(allocator, args[2]);
+        },
+        .search_game => {
+            if (args.len < 3) {
+                std.log.err("Usage: stl-next search-game <name>", .{});
+                return;
+            }
+            try searchSteamGridDB(allocator, args[2]);
         },
         .version => printVersion(),
         .help => printUsage(),
@@ -407,13 +450,16 @@ fn printVersion() void {
         \\STL-Next v{s}
         \\Steam Tinker Launch - Next Generation
         \\
-        \\Phase 2: Binary VDF + LevelDB
+        \\Phase 4.5: Extended Features
         \\
         \\Features:
         \\  ✓ Binary VDF streaming parser
         \\  ✓ Fast AppID seeking (<10ms)
         \\  ✓ LevelDB collections support
-        \\  ✓ Hidden games detection
+        \\  ✓ Winetricks integration
+        \\  ✓ Custom pre/post launch commands
+        \\  ✓ Non-Steam game management
+        \\  ✓ SteamGridDB artwork
         \\
         \\https://github.com/e421/stl-next
         \\
@@ -425,38 +471,52 @@ fn printUsage() void {
     stdout.writeAll(
         \\Usage: stl-next <command> [options]
         \\
-        \\Commands:
-        \\  run <AppID>       Launch a game with STL-Next configuration
-        \\  info <AppID>      Show game information (JSON)
-        \\  list-games        List installed Steam games (JSON)
-        \\  list-protons      List available Proton versions (JSON)
-        \\  collections <ID>  Show collections for a game
-        \\  benchmark         Run performance benchmarks
-        \\  wait <AppID>      Start wait requester daemon (Phase 4)
-        \\  tui <AppID>       Connect TUI client to daemon (Phase 4)
-        \\  nxm <url>         Handle NXM protocol link (Phase 4)
-        \\  configure         Open configuration UI (WIP)
-        \\  install <tool>    Install a tool (ReShade, MO2, etc.) (WIP)
-        \\  version           Show version information
-        \\  help              Show this help message
+        \\Steam Game Commands:
+        \\  run <AppID>           Launch a game with STL-Next configuration
+        \\  info <AppID>          Show game information (JSON)
+        \\  list-games            List installed Steam games (JSON)
+        \\  list-protons          List available Proton versions (JSON)
+        \\  collections <ID>      Show collections for a game
+        \\  benchmark             Run performance benchmarks
+        \\
+        \\Wait Requester / IPC:
+        \\  wait <AppID>          Start wait requester daemon
+        \\  tui <AppID>           Connect TUI client to daemon
+        \\  nxm <url>             Handle NXM protocol link
+        \\
+        \\Non-Steam Games:
+        \\  add-game <name> <exe> [--windows|--native]  Add a non-Steam game
+        \\  remove-game <id>      Remove a non-Steam game by ID
+        \\  list-nonsteam         List all non-Steam games
+        \\  import-heroic         Import games from Heroic (Epic/GOG/Amazon)
+        \\
+        \\SteamGridDB Artwork:
+        \\  artwork <AppID>       Fetch artwork for a Steam game
+        \\  search-game <name>    Search SteamGridDB for a game
+        \\
+        \\Configuration:
+        \\  configure             Open configuration UI (WIP)
+        \\  install <tool>        Install a tool (ReShade, MO2, etc.) (WIP)
         \\
         \\Shorthand:
-        \\  stl-next <AppID>  Same as 'stl-next run <AppID>'
+        \\  stl-next <AppID>      Same as 'stl-next run <AppID>'
         \\
         \\Environment Variables:
-        \\  STL_CONFIG_DIR    Config directory (default: ~/.config/stl-next)
-        \\  STL_LOG_LEVEL     Log level: debug, info, warn, error
-        \\  STL_JSON_OUTPUT   Force JSON output for all commands
-        \\  STL_SKIP_WAIT     Skip wait requester (instant launch)
-        \\  STL_COUNTDOWN     Wait requester countdown seconds (default: 10)
+        \\  STL_CONFIG_DIR        Config directory (default: ~/.config/stl-next)
+        \\  STL_LOG_LEVEL         Log level: debug, info, warn, error
+        \\  STL_SKIP_WAIT         Skip wait requester (instant launch)
+        \\  STL_COUNTDOWN         Wait requester countdown seconds (default: 10)
+        \\  STEAMGRIDDB_API_KEY   API key for SteamGridDB (free at steamgriddb.com)
         \\
         \\Examples:
         \\  stl-next 413150                    # Launch Stardew Valley
         \\  stl-next info 489830               # Show Skyrim SE info
         \\  stl-next list-games | jq '.[]'     # List games with jq
-        \\  stl-next wait 413150               # Start wait requester daemon
-        \\  stl-next tui 413150                # Connect TUI client
-        \\  stl-next nxm "nxm://..."           # Handle NXM link
+        \\  stl-next add-game "Celeste" ~/Games/Celeste/Celeste --native
+        \\  stl-next add-game "Hades" ~/Games/Hades/Hades.exe --windows
+        \\  stl-next import-heroic             # Import Epic/GOG games
+        \\  stl-next artwork 413150            # Get Stardew Valley artwork
+        \\  stl-next search-game "Hollow Knight"  # Search SteamGridDB
         \\
     ) catch {};
 }
@@ -544,6 +604,196 @@ fn handleNxmLink(allocator: std.mem.Allocator, url: []const u8) !void {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 4.5: NON-STEAM GAMES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+fn addNonSteamGame(allocator: std.mem.Allocator, name: []const u8, executable: []const u8, extra_args: []const []const u8) !void {
+    var manager = try nonsteam.NonSteamManager.init(allocator);
+    defer manager.deinit();
+    
+    // Parse platform from args
+    var platform = nonsteam.Platform.native;
+    for (extra_args) |arg| {
+        if (std.mem.eql(u8, arg, "--windows")) {
+            platform = .windows;
+        } else if (std.mem.eql(u8, arg, "--native")) {
+            platform = .native;
+        } else if (std.mem.eql(u8, arg, "--flatpak")) {
+            platform = .flatpak;
+        } else if (std.mem.eql(u8, arg, "--appimage")) {
+            platform = .appimage;
+        }
+    }
+    
+    const game = nonsteam.NonSteamGame{
+        .id = 0, // Will be assigned
+        .name = try allocator.dupe(u8, name),
+        .platform = platform,
+        .executable = try allocator.dupe(u8, executable),
+    };
+    
+    try manager.addGame(game);
+    
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Added non-Steam game: {s} ({s})\n", .{ name, @tagName(platform) });
+}
+
+fn removeNonSteamGame(allocator: std.mem.Allocator, id: i32) !void {
+    var manager = try nonsteam.NonSteamManager.init(allocator);
+    defer manager.deinit();
+    
+    if (manager.getGame(id)) |game| {
+        const name = game.name;
+        try manager.removeGame(id);
+        const stdout = std.io.getStdOut().writer();
+        try stdout.print("Removed non-Steam game: {s}\n", .{name});
+    } else {
+        std.log.err("Game with ID {d} not found", .{id});
+    }
+}
+
+fn listNonSteamGames(allocator: std.mem.Allocator) !void {
+    var manager = try nonsteam.NonSteamManager.init(allocator);
+    defer manager.deinit();
+    
+    const stdout = std.io.getStdOut().writer();
+    try stdout.writeAll("[\n");
+    
+    const games = manager.listGames();
+    for (games, 0..) |game, i| {
+        try stdout.print(
+            \\  {{
+            \\    "id": {d},
+            \\    "name": "{s}",
+            \\    "platform": "{s}",
+            \\    "executable": "{s}",
+            \\    "source": "{s}"
+            \\  }}{s}
+            \\
+        , .{
+            game.id,
+            game.name,
+            @tagName(game.platform),
+            game.executable,
+            @tagName(game.source),
+            if (i < games.len - 1) "," else "",
+        });
+    }
+    
+    try stdout.writeAll("]\n");
+    try stdout.print("// Found {d} non-Steam game(s)\n", .{games.len});
+}
+
+fn importHeroicGames(allocator: std.mem.Allocator) !void {
+    var manager = try nonsteam.NonSteamManager.init(allocator);
+    defer manager.deinit();
+    
+    const count = manager.importFromHeroic() catch |err| {
+        std.log.err("Failed to import from Heroic: {}", .{err});
+        return;
+    };
+    
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Imported {d} game(s) from Heroic\n", .{count});
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 4.5: STEAMGRIDDB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+fn fetchArtwork(allocator: std.mem.Allocator, identifier: []const u8) !void {
+    var client = steamgriddb.SteamGridDBClient.init(allocator, null) catch |err| {
+        if (err == error.NoApiKey) {
+            std.log.err("SteamGridDB requires an API key.", .{});
+            std.log.err("Set STEAMGRIDDB_API_KEY or get a free key at https://www.steamgriddb.com/profile/preferences/api", .{});
+            return;
+        }
+        return err;
+    };
+    defer client.deinit();
+    
+    const stdout = std.io.getStdOut().writer();
+    
+    // Try to parse as AppID first
+    if (std.fmt.parseInt(u32, identifier, 10)) |app_id| {
+        std.log.info("Fetching artwork for Steam AppID {d}...", .{app_id});
+        
+        // Fetch grid images
+        const grids = client.getImagesByAppId(app_id, .grid) catch |err| {
+            std.log.warn("Failed to fetch grids: {}", .{err});
+            return;
+        };
+        defer {
+            for (grids) |*g| g.deinit(allocator);
+            allocator.free(grids);
+        }
+        
+        if (grids.len > 0) {
+            try stdout.print("Found {d} grid image(s):\n", .{grids.len});
+            for (grids[0..@min(5, grids.len)]) |grid| {
+                try stdout.print("  - {s} ({d}x{d}, score: {d})\n", .{
+                    grid.url[0..@min(60, grid.url.len)],
+                    grid.width,
+                    grid.height,
+                    grid.score,
+                });
+            }
+            
+            // Download the top-scored one
+            if (grids.len > 0) {
+                const path = try client.downloadImage(&grids[0], .grid, app_id);
+                defer allocator.free(path);
+                try stdout.print("\nDownloaded to: {s}\n", .{path});
+            }
+        } else {
+            try stdout.writeAll("No grid images found.\n");
+        }
+    } else |_| {
+        // Search by name
+        std.log.info("Searching SteamGridDB for '{s}'...", .{identifier});
+        try searchSteamGridDB(allocator, identifier);
+    }
+}
+
+fn searchSteamGridDB(allocator: std.mem.Allocator, name: []const u8) !void {
+    var client = steamgriddb.SteamGridDBClient.init(allocator, null) catch |err| {
+        if (err == error.NoApiKey) {
+            std.log.err("SteamGridDB requires an API key.", .{});
+            std.log.err("Set STEAMGRIDDB_API_KEY or get a free key at https://www.steamgriddb.com/profile/preferences/api", .{});
+            return;
+        }
+        return err;
+    };
+    defer client.deinit();
+    
+    const results = try client.searchGame(name);
+    defer {
+        for (results) |*r| r.deinit(allocator);
+        allocator.free(results);
+    }
+    
+    const stdout = std.io.getStdOut().writer();
+    
+    if (results.len == 0) {
+        try stdout.print("No games found matching '{s}'\n", .{name});
+        return;
+    }
+    
+    try stdout.print("Found {d} game(s) matching '{s}':\n\n", .{ results.len, name });
+    
+    for (results[0..@min(10, results.len)]) |result| {
+        try stdout.print("  ID: {d: <8} {s}{s}\n", .{
+            result.id,
+            result.name,
+            if (result.verified) " ✓" else "",
+        });
+    }
+    
+    try stdout.writeAll("\nUse the ID to fetch artwork:\n");
+    try stdout.writeAll("  stl-next artwork <id>\n");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // TESTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -568,11 +818,17 @@ test {
     _ = @import("engine/steam.zig");
     _ = @import("engine/appinfo.zig");
     _ = @import("engine/leveldb.zig");
+    _ = @import("engine/nonsteam.zig");
+    _ = @import("engine/steamgriddb.zig");
     
     // IPC modules
     _ = @import("ipc/protocol.zig");
     _ = @import("ipc/server.zig");
     _ = @import("ipc/client.zig");
+    
+    // Tinker modules
+    _ = @import("tinkers/winetricks.zig");
+    _ = @import("tinkers/customcmd.zig");
     
     // Modding modules
     _ = @import("modding/manager.zig");

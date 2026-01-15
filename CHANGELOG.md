@@ -2,6 +2,59 @@
 
 All notable changes to STL-Next are documented in this file.
 
+## [0.5.0-alpha] - Extended Features
+
+### Added
+
+#### Winetricks Integration (`src/tinkers/winetricks.zig`)
+- Automatic winetricks integration during prefix preparation
+- Per-game verb configuration
+- Preset verb collections (basic, dx_essentials, dotnet_legacy, audio_fix, full)
+- Silent mode support for unattended installation
+- Force reinstall option
+- Integration with Proton's Wine binary
+
+#### Custom Commands (`src/tinkers/customcmd.zig`)
+- Pre-launch commands (run before game starts)
+- Post-exit commands (run after game exits)
+- On-error commands (run if launch fails)
+- Environment variables available to commands ($STL_APP_ID, $STL_GAME_NAME, etc.)
+- Per-command timeouts
+- Background command support
+- AppID filtering for game-specific commands
+- Built-in command templates (kill discord, CPU governor, syncthing, notifications)
+
+#### Non-Steam Games (`src/engine/nonsteam.zig`)
+- Full support for non-Steam games
+- Platform types: native, windows, flatpak, appimage, snap, web
+- Game sources: manual, gog, epic, amazon, ea, ubisoft, itch, humble, gamejolt
+- CLI commands: add-game, remove-game, list-nonsteam, import-heroic
+- Heroic Games Launcher import (Epic/GOG/Amazon)
+- All STL-Next features work with non-Steam games
+
+#### SteamGridDB Integration (`src/engine/steamgriddb.zig`)
+- Game artwork fetching from SteamGridDB
+- Image types: grid (600x900), hero (1920x620), logo, icon
+- Style preferences (alternate, blurred, material, etc.)
+- CLI commands: artwork, search-game
+- Image caching to ~/.cache/stl-next/steamgriddb/
+- Works with both Steam AppIDs and SteamGridDB game IDs
+
+#### Documentation
+- `docs/WINETRICKS_GUIDE.md` - Complete winetricks integration guide
+- `docs/CUSTOM_COMMANDS.md` - Custom commands configuration guide
+- `docs/NONSTEAM_GAMES.md` - Non-Steam games management guide
+- `docs/STEAMGRIDDB_GUIDE.md` - SteamGridDB artwork integration guide
+
+### Changed
+
+- Version bumped to 0.5.0-alpha
+- Extended GameConfig with winetricks, custom_commands, and steamgriddb options
+- TinkerRegistry now includes winetricks and customcmd tinkers (5 total)
+- Updated help text with new commands
+
+---
+
 ## [0.4.5-alpha] - Bug Verification & Documentation
 
 ### Added

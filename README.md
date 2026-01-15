@@ -35,6 +35,7 @@ See: [STL_URL_TRUNCATION_BUG_REPORT.md](../stardew-modding-nix/STL_URL_TRUNCATIO
 | Phase 3 | ✅ Complete | Tinker modules (MangoHud, Gamescope, GameMode) |
 | Phase 3.5 | ✅ Complete | Launch Options, JSON parsing, exec(), tests |
 | Phase 4 | ✅ Complete | **IPC Daemon**, Wait Requester, NXM Handler, TUI |
+| Phase 4.5 | ✅ Complete | **Winetricks**, Custom Commands, Non-Steam Games, SteamGridDB |
 | Phase 5 | 🚧 Next | Raylib GUI, Full MO2/Vortex integration |
 
 ## ✨ Phase 4 Features
@@ -218,6 +219,15 @@ Edge case tests in `src/tests/edge_cases.zig`:
 |----------|-------------|
 | [NixOS Installation](docs/NIXOS_INSTALLATION.md) | Dedicated guide for NixOS users |
 | [Stardrop Integration](docs/STARDROP_INTEGRATION.md) | Stardrop mod manager research and plan |
+
+### Feature Guides
+
+| Document | Description |
+|----------|-------------|
+| [Winetricks Guide](docs/WINETRICKS_GUIDE.md) | Windows components & DLL installation |
+| [Custom Commands](docs/CUSTOM_COMMANDS.md) | Pre/post launch shell commands |
+| [Non-Steam Games](docs/NONSTEAM_GAMES.md) | Adding GOG, Epic, and other games |
+| [SteamGridDB Guide](docs/STEAMGRIDDB_GUIDE.md) | Game artwork integration |
 
 ## 🔧 Development
 
