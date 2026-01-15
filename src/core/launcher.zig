@@ -76,6 +76,12 @@ pub fn launch(
     try env.put("SteamGameId", app_id_str);
     try env.put("STEAM_COMPAT_DATA_PATH", prefix_path);
 
+    // Phase 5.5: Apply Proton Advanced Settings
+    try applyProtonAdvancedConfig(&env, &game_config.proton_advanced);
+
+    // Phase 5.6: Apply GPU Settings
+    try applyGpuConfig(&env, &game_config.gpu);
+
     // Phase 6: Build argument list
     var args: std.ArrayList([]const u8) = .{};
     defer args.deinit(allocator);
@@ -180,6 +186,81 @@ pub fn launch(
         .env_count = env.count(),
         .setup_time_ms = setup_time_ms,
     };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 6: Advanced Configuration Helpers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Apply Proton advanced settings to environment
+fn applyProtonAdvancedConfig(env: *std.process.EnvMap, proton_config: *const config.ProtonAdvancedConfig) !void {
+    // Proton Wayland toggle (STL issue #1259)
+    if (proton_config.enable_wayland) {
+        try env.put("PROTON_ENABLE_WAYLAND", "1");
+        std.log.info("Proton: Enabled native Wayland support", .{});
+    }
+
+    // NVIDIA DLSS/NVAPI support
+    if (proton_config.enable_nvapi) {
+        try env.put("PROTON_ENABLE_NVAPI", "1");
+        try env.put("DXVK_ENABLE_NVAPI", "1");
+        std.log.info("Proton: Enabled NVAPI/DLSS support", .{});
+    }
+
+    // Ray Tracing support
+    if (proton_config.enable_rtx) {
+        try env.put("VKD3D_FEATURE_LEVEL", "12_2");
+        try env.put("PROTON_HIDE_NVIDIA_GPU", "0");
+        std.log.info("Proton: Enabled Ray Tracing (DXR)", .{});
+    }
+
+    // Custom Wine prefix
+    if (proton_config.wine_prefix) |prefix| {
+        try env.put("WINEPREFIX", prefix);
+        std.log.info("Proton: Custom prefix: {s}", .{prefix});
+    }
+
+    // DXVK async shader compilation
+    if (proton_config.dxvk_async) {
+        try env.put("DXVK_ASYNC", "1");
+    }
+
+    // VKD3D Ray Tracing
+    if (proton_config.vkd3d_rt) {
+        try env.put("VKD3D_CONFIG", "dxr");
+    }
+}
+
+/// Apply GPU configuration to environment
+fn applyGpuConfig(env: *std.process.EnvMap, gpu_config: *const config.GpuConfig) !void {
+    // Vulkan device selection (for multi-GPU systems)
+    if (gpu_config.vk_device) |device| {
+        try env.put("DXVK_FILTER_DEVICE_NAME", device);
+        try env.put("VKD3D_FILTER_DEVICE_NAME", device);
+        std.log.info("GPU: Selected Vulkan device: {s}", .{device});
+    }
+
+    // Mesa device index (STL issue #1201 - VKDeviceChooser)
+    if (gpu_config.mesa_device_index) |idx| {
+        var buf: [16]u8 = undefined;
+        const idx_str = std.fmt.bufPrint(&buf, "{d}", .{idx}) catch "0";
+        try env.put("MESA_VK_DEVICE_SELECT", idx_str);
+        std.log.info("GPU: Mesa device index: {d}", .{idx});
+    }
+
+    // PRIME render offload
+    if (gpu_config.prime_offload) {
+        try env.put("__NV_PRIME_RENDER_OFFLOAD", "1");
+        try env.put("__VK_LAYER_NV_optimus", "NVIDIA_only");
+        try env.put("__GLX_VENDOR_LIBRARY_NAME", "nvidia");
+        std.log.info("GPU: Enabled PRIME render offload", .{});
+    }
+
+    // DRI device override
+    if (gpu_config.dri_device) |device| {
+        try env.put("DRI_PRIME", device);
+        std.log.info("GPU: DRI device: {s}", .{device});
+    }
 }
 
 fn findProtonBinary(

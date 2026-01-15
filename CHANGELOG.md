@@ -2,6 +2,78 @@
 
 All notable changes to STL-Next are documented in this file.
 
+## [0.6.0-alpha] - Phase 6: Advanced Tinkers + Configuration
+
+### Added
+
+#### New Tinker Modules (Phase 6)
+
+**ReShade Tinker** (`src/tinkers/reshade.zig`)
+- Shader injection for DX9/10/11/12/OpenGL/Vulkan
+- Vulkan layer configuration
+- Preset management
+- Screenshot path configuration
+
+**vkBasalt Tinker** (`src/tinkers/vkbasalt.zig`)
+- Vulkan post-processing layer
+- Contrast Adaptive Sharpening (CAS - AMD FidelityFX)
+- Fast Approximate Anti-Aliasing (FXAA)
+- Subpixel Morphological Anti-Aliasing (SMAA)
+- Deband and LUT support
+- Configuration file generation
+
+**SpecialK Tinker** (`src/tinkers/specialk.zig`)
+- Game modification framework for Wine/Proton
+- HDR injection and tonemapping
+- Low-latency frame limiting
+- Texture modding support
+- Input latency reduction
+- DLL override configuration
+
+**LatencyFleX Tinker** (`src/tinkers/latencyflex.zig`)
+- NVIDIA Reflex alternative for Linux
+- Auto-detection of v1 (Vulkan layer) and v2 (DXVK)
+- Frame cap integration
+- Wait target configuration
+
+**MultiApp Tinker** (`src/tinkers/multiapp.zig`)
+- Launch helper apps with games
+- Support for before/with/after game timing
+- Auto-close on game exit policy
+- Presets: OBS, Discord, GPU monitor
+- Configurable delays between launches
+
+#### Advanced Configuration (`src/core/config.zig`)
+
+**Proton Advanced Settings** (`ProtonAdvancedConfig`)
+- `enable_wayland` - Proton native Wayland support (STL issue #1259)
+- `enable_nvapi` - NVIDIA DLSS/NVAPI support
+- `enable_rtx` - Ray Tracing (DXR) support
+- `wine_prefix` - Custom Wine prefix override
+- `dxvk_async` - DXVK async shader compilation
+- `vkd3d_rt` - VKD3D Ray Tracing config
+
+**GPU Configuration** (`GpuConfig`)
+- `vk_device` - Vulkan device selection (multi-GPU systems)
+- `mesa_device_index` - Mesa device index (STL issue #1201)
+- `prime_offload` - NVIDIA PRIME render offload
+- `dri_device` - DRI device path override
+
+### Changed
+
+- Tinker registry now has 10 built-in tinkers (was 5)
+- Config file now supports Phase 6 tinker configurations
+- Launcher applies Proton and GPU settings before game launch
+
+### Technical
+
+- Fixed ArrayList API for Zig 0.15.x (ArrayListUnmanaged)
+- Fixed std.time.sleep → std.Thread.sleep for Zig 0.15.x
+- Config types defined centrally to avoid circular imports
+- Buffer-based config generation for better memory management
+
+---
+
 ## [0.5.5-alpha] - Nexus Mods API + GUI Wayland Fix
 
 ### Added

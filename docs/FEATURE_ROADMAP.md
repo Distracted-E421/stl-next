@@ -27,8 +27,11 @@ This document tracks feature parity with the original SteamTinkerLaunch and plan
 |---------|-------------|----------|-------|
 | MO2 Integration | ✅ | 🚧 Basic | Detection only |
 | Vortex Integration | ✅ | ✅ Basic | Auto-discovery, NXM forwarding |
-| ReShade | ✅ | ❌ Phase 6 | Planned |
-| SpecialK | ✅ | ❌ Phase 6 | Planned |
+| ReShade | ✅ | ✅ Phase 6 | Complete |
+| SpecialK | ✅ | ✅ Phase 6 | Complete |
+| vkBasalt | ✅ | ✅ Phase 6 | Complete |
+| LatencyFleX | ❌ | ✅ Phase 6 | Complete |
+| MultiApp | ❌ | ✅ Phase 6 | Complete |
 | GUI | ✅ (yad) | ✅ Raylib | Wait Requester complete |
 | Nexus Mods API | ❌ | ✅ Full | Premium downloads, tracking |
 

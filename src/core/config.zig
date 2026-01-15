@@ -2,12 +2,12 @@ const std = @import("std");
 const fs = std.fs;
 const json = std.json;
 
-// Import tinker configs
+// Import tinker configs (Phase 4.5)
 const winetricks = @import("../tinkers/winetricks.zig");
 const customcmd = @import("../tinkers/customcmd.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CONFIG: Game Configuration Management (Phase 4.5 - Extended)
+// CONFIG: Game Configuration Management (Phase 6 - Full Featured)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // Uses proper std.json parsing instead of string searching.
@@ -17,6 +17,15 @@ const customcmd = @import("../tinkers/customcmd.zig");
 //   - Winetricks configuration
 //   - Custom commands (pre/post launch)
 //   - SteamGridDB settings
+//
+// Phase 6 additions:
+//   - ReShade (shader injection)
+//   - vkBasalt (Vulkan post-processing)
+//   - SpecialK (HDR, frame pacing)
+//   - LatencyFleX (low-latency gaming)
+//   - MultiApp (helper app launcher)
+//   - Proton Wayland toggle
+//   - GPU device selection
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -77,20 +86,188 @@ pub const SteamGridDBConfig = struct {
     game_id: ?u32 = null,
 };
 
+// Phase 6 Configuration Types (defined inline to avoid circular imports)
+
+/// ReShade configuration
+pub const ReshadeConfig = struct {
+    enabled: bool = false,
+    renderer: ?ReshadeRenderer = null,
+    preset: ?[]const u8 = null,
+    shader_sources: []const []const u8 = &.{},
+    performance_mode: bool = false,
+    show_fps: bool = false,
+    show_clock: bool = false,
+    screenshot_path: ?[]const u8 = null,
+};
+
+pub const ReshadeRenderer = enum {
+    dx9,
+    dx10,
+    dx11,
+    dx12,
+    opengl,
+    vulkan,
+    unknown,
+};
+
+/// vkBasalt configuration
+pub const VkbasaltConfig = struct {
+    enabled: bool = false,
+    effects: []const VkbasaltEffect = &.{.cas},
+    cas_sharpness: f32 = 0.4,
+    fxaa_quality: u8 = 3,
+    smaa_threshold: f32 = 0.05,
+    deband_range: u8 = 16,
+    lut_file: ?[]const u8 = null,
+    custom_effects: []const []const u8 = &.{},
+    toggle_key: ?[]const u8 = null,
+};
+
+pub const VkbasaltEffect = enum {
+    cas,
+    fxaa,
+    smaa,
+    deband,
+    lut,
+
+    pub fn toString(self: VkbasaltEffect) []const u8 {
+        return switch (self) {
+            .cas => "cas",
+            .fxaa => "fxaa",
+            .smaa => "smaa",
+            .deband => "deband",
+            .lut => "lut",
+        };
+    }
+};
+
+/// SpecialK configuration
+pub const SpecialkConfig = struct {
+    enabled: bool = false,
+    features: []const SpecialkFeature = &.{},
+    target_fps: ?u32 = null,
+    hdr_brightness: f32 = 1.0,
+    hdr_peak: f32 = 1000.0,
+    low_latency: bool = true,
+    flip_model: bool = true,
+    texture_cache: bool = false,
+    injection_delay_ms: u32 = 0,
+};
+
+pub const SpecialkFeature = enum {
+    hdr,
+    framerate_limit,
+    texture_mod,
+    input_fix,
+    overlay_fix,
+    vsync_fix,
+};
+
+/// LatencyFleX configuration
+pub const LatencyflexConfig = struct {
+    enabled: bool = false,
+    mode: LatencyflexMode = .auto,
+    max_fps: ?u32 = null,
+    wait_target_us: u32 = 0,
+    allow_oversleep: bool = true,
+};
+
+pub const LatencyflexMode = enum {
+    v1,
+    v2,
+    auto,
+};
+
+/// Multi-app launcher configuration
+pub const MultiappConfig = struct {
+    enabled: bool = false,
+    apps: []const HelperApp = &.{},
+    global_delay_ms: u32 = 500,
+    kill_timeout_ms: u32 = 5000,
+};
+
+pub const HelperApp = struct {
+    name: []const u8,
+    command: []const u8,
+    args: []const []const u8 = &.{},
+    working_dir: ?[]const u8 = null,
+    timing: AppLaunchTiming = .before_game,
+    close_policy: AppClosePolicy = .on_game_exit,
+    delay_ms: u32 = 0,
+    minimize: bool = false,
+};
+
+pub const AppLaunchTiming = enum {
+    before_game,
+    with_game,
+    after_game,
+};
+
+pub const AppClosePolicy = enum {
+    on_game_exit,
+    leave_running,
+    ask_user,
+};
+
+/// Proton/Wine advanced configuration
+pub const ProtonAdvancedConfig = struct {
+    /// Enable Proton's native Wayland support
+    enable_wayland: bool = false,
+    /// Enable NVIDIA DLSS
+    enable_nvapi: bool = false,
+    /// Enable Ray Tracing support
+    enable_rtx: bool = false,
+    /// Custom WINE prefix path (overrides default)
+    wine_prefix: ?[]const u8 = null,
+    /// DXVK async shader compilation
+    dxvk_async: bool = true,
+    /// VKD3D Ray Tracing
+    vkd3d_rt: bool = false,
+};
+
+/// GPU/Display configuration
+pub const GpuConfig = struct {
+    /// Vulkan device selection (for multi-GPU systems)
+    /// Use "1002:73bf" format for vendor:device
+    vk_device: ?[]const u8 = null,
+    /// Mesa Vulkan device index (0, 1, etc.)
+    mesa_device_index: ?u8 = null,
+    /// Force specific GPU for PRIME render offload
+    prime_offload: bool = false,
+    /// DRI device path override
+    dri_device: ?[]const u8 = null,
+};
+
 /// Complete game configuration
 pub const GameConfig = struct {
     app_id: u32,
+    name: []const u8 = "Unknown Game",
     use_native: bool = false,
     proton_version: ?[]const u8 = null,
     launch_options: ?[]const u8 = null,
-    
-    // Tinker configurations
+
+    // Core tinker configurations (Phase 3)
     mangohud: MangoHudConfig = .{},
     gamescope: GamescopeConfig = .{},
     gamemode: GameModeConfig = .{},
+
+    // Extended tinker configurations (Phase 4.5)
     winetricks: WinetricksConfig = .{},
     custom_commands: CustomCommandsConfig = .{},
-    
+
+    // Advanced tinker configurations (Phase 6)
+    reshade: ReshadeConfig = .{},
+    vkbasalt: VkbasaltConfig = .{},
+    specialk: SpecialkConfig = .{},
+    latencyflex: LatencyflexConfig = .{},
+    multiapp: MultiappConfig = .{},
+
+    // Proton/Wine advanced settings
+    proton_advanced: ProtonAdvancedConfig = .{},
+
+    // GPU configuration
+    gpu: GpuConfig = .{},
+
     // Artwork configuration
     steamgriddb: SteamGridDBConfig = .{},
 
