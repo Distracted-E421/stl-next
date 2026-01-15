@@ -234,15 +234,17 @@ pub const CollectionsClient = struct {
 
         try child.spawn();
 
-        var stdout = std.ArrayList(u8).init(self.allocator);
-        defer stdout.deinit();
+        var stdout: std.ArrayList(u8) = .{};
+        defer stdout.deinit(self.allocator);
+        var stderr: std.ArrayList(u8) = .{};
+        defer stderr.deinit(self.allocator);
 
-        try child.collectOutput(&stdout, null, 1024 * 1024);
+        try child.collectOutput(self.allocator, &stdout, &stderr, 1024 * 1024);
         _ = try child.wait();
 
         _ = game_domain;
 
-        return try stdout.toOwnedSlice();
+        return try stdout.toOwnedSlice(self.allocator);
     }
 
     fn parseCollectionJson(self: *Self, json_str: []const u8) !Collection {
@@ -269,10 +271,10 @@ pub const CollectionsClient = struct {
         const obj = coll.object;
 
         // Parse mods array
-        var mods_list = std.ArrayList(CollectionMod).init(self.allocator);
+        var mods_list: std.ArrayList(CollectionMod) = .{};
         errdefer {
             for (mods_list.items) |*m| m.deinit(self.allocator);
-            mods_list.deinit();
+            mods_list.deinit(self.allocator);
         }
 
         if (obj.get("mods")) |mods_arr| {
@@ -329,13 +331,13 @@ pub const CollectionsClient = struct {
                         }
                     }
 
-                    try mods_list.append(mod);
+                    try mods_list.append(self.allocator, mod);
                 }
             }
         }
 
         // Parse main collection fields
-        var collection = Collection{
+        const collection = Collection{
             .slug = try self.allocator.dupe(u8, if (obj.get("slug")) |s| if (s == .string) s.string else "" else ""),
             .id = if (obj.get("id")) |i| if (i == .integer) @intCast(i.integer) else 0 else 0,
             .name = try self.allocator.dupe(u8, if (obj.get("name")) |n| if (n == .string) n.string else "Unknown" else "Unknown"),
@@ -415,7 +417,7 @@ pub const CollectionsClient = struct {
                 }
                 break :blk null;
             },
-            .mods = try mods_list.toOwnedSlice(),
+            .mods = try mods_list.toOwnedSlice(self.allocator),
             .adult_content = if (obj.get("adultContent")) |ac| if (ac == .bool) ac.bool else false else false,
         };
 
@@ -463,4 +465,3 @@ test "collection mod structure" {
     try std.testing.expectEqual(@as(u32, 12345), mod.mod_id);
     try std.testing.expectEqualStrings("Test Mod", mod.name);
 }
-

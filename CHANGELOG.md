@@ -2,6 +2,112 @@
 
 All notable changes to STL-Next are documented in this file.
 
+## [0.9.0-alpha] - Phase 8.5: Profile System Complete
+
+### Added
+
+**Full Profile Persistence**
+- Profiles are now saved to JSON config files (`~/.config/stl-next/games/<AppID>.json`)
+- Profile loading from JSON with all fields (GPU, monitor, resolution, tinker overrides)
+- `profile-create` now persists profiles immediately to disk
+- `profile-set` persists active profile selection
+- `profile-delete` removes profiles from config
+
+**Binary Steam Shortcuts VDF Writing**
+- Full binary VDF parser/writer for Steam's `shortcuts.vdf`
+- Automatic Steam user detection via `/userdata/<uid>/config/`
+- Correct binary format with all required fields:
+  - appid, AppName, Exe, StartDir, LaunchOptions
+  - AllowDesktopConfig, AllowOverlay, OpenVR
+  - Empty tags section
+- Appends to existing shortcuts without corrupting them
+- Unique shortcut ID generation via Wyhash
+
+**Launch Profile Integration**
+- `--profile "Name"` flag in `run` command
+- Automatic GPU environment variable application from profile
+- Profile-specific MangoHud/Gamescope toggles
+
+### Fixed
+- Fixed memory leak in LaunchResult (added allocator field + deinit)
+- Fixed GPU preference parsing for `intel_arc` variant
+
+---
+
+## [0.8.0-alpha] - Phase 8: D-Bus Integration (IN PROGRESS)
+
+### Added
+
+#### D-Bus Integration - KILLER FEATURE for Multi-GPU!
+
+**GPU Detection & Selection** (`src/dbus/gpu.zig`)
+- Auto-detect GPUs via switcheroo-control D-Bus or `/sys/class/drm` fallback
+- **Correct Intel Arc identification** - Arc A770/A750/A580/A380/A310 detected as DISCRETE, not integrated!
+- PCI device ID parsing for vendor/device identification
+- Environment variable generation for GPU selection:
+  - NVIDIA: `__NV_PRIME_RENDER_OFFLOAD`, `__VK_LAYER_NV_optimus`, `__GLX_VENDOR_LIBRARY_NAME`
+  - Intel/AMD: `MESA_VK_DEVICE_SELECT`, `DRI_PRIME`
+
+**Session Management** (`src/dbus/session.zig`)
+- Power profile switching via `net.hadess.PowerProfiles`
+- Screen saver inhibit via `org.freedesktop.ScreenSaver`
+- Desktop notifications via `org.freedesktop.Notifications` / `notify-send`
+- Gaming session lifecycle: `beginGamingSession()` / `endGamingSession()`
+
+**CLI Commands**
+- `stl-next gpu` / `stl-next gpu-list` - List detected GPUs with details
+- `stl-next gpu-test [pref]` - Test GPU selection (integrated/discrete/auto/N)
+- `stl-next session` / `stl-next session-test` - Show D-Bus session capabilities
+
+**Launch Profiles** - No More Remembering Launch Options!
+- `stl-next profile` - Show profile help
+- `stl-next profile-list <AppID>` - List profiles for a game
+- `stl-next profile-create <AppID> <name> [--gpu X] [--monitor Y]`
+- `stl-next profile-set <AppID> <name>` - Set active profile
+- `stl-next profile-delete <AppID> <name>` - Delete a profile
+- `stl-next profile-shortcut <AppID> <name>` - Create Steam library shortcut
+
+**Profile Features** (All Implemented!)
+- `--profile "Name"` flag for quick launch with specific profile
+- Per-game multiple configurations (e.g., "Arc A770 - Main Monitor", "RTX 2080 - 4K TV")
+- GPU preference per profile (nvidia, arc, amd, specific index)
+- Target monitor suggestion
+- Resolution override: `--resolution 2560x1440@144`
+- MangoHud/Gamescope toggles: `--mangohud`, `--no-mangohud`
+- Steam shortcut creation with auto-detected binary path
+- Profile-aware game launching with GPU env var application
+
+**Example Workflow:**
+```bash
+# Create a profile
+stl-next profile-create 413150 "Arc A770" --gpu arc --monitor DP-1 --resolution 2560x1440@144 --mangohud
+
+# Launch with profile
+stl-next run 413150 --profile "Arc A770"
+
+# Create Steam shortcut (appears as "Stardew Valley [Arc A770]")
+stl-next profile-shortcut 413150 "Arc A770"
+```
+
+**Launcher Integration**
+- Gaming session auto-starts on game launch
+- Power profile switches to performance mode
+- Screen saver inhibited during gameplay
+- Desktop notification sent on launch
+
+### Technical
+
+- D-Bus client uses `busctl` subprocess (no C dependencies)
+- Intel Arc device IDs (Alchemist): 0x56A0-0x56B3
+- Session manager detects available D-Bus services
+- Graceful fallbacks when services unavailable
+
+### Documentation
+
+- `docs/DBUS_INTEGRATION.md` - Complete design document
+
+---
+
 ## [0.7.0-alpha] - Phase 7: Stardrop Integration & Nexus Collections
 
 ### Added

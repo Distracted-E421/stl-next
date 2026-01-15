@@ -2,9 +2,10 @@ const std = @import("std");
 const steam = @import("../engine/steam.zig");
 const config = @import("config.zig");
 const tinkers = @import("../tinkers/mod.zig");
+const dbus = @import("../dbus/mod.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// LAUNCHER (Phase 3.5 - Hardened)
+// LAUNCHER (Phase 3.5 - Hardened, Phase 8 - D-Bus Session Management)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 pub const LaunchResult = struct {
@@ -13,6 +14,15 @@ pub const LaunchResult = struct {
     env_count: usize,
     setup_time_ms: f64,
     error_msg: ?[]const u8 = null,
+    allocator: std.mem.Allocator,
+    
+    pub fn deinit(self: *const LaunchResult) void {
+        // Free each command string if allocated
+        for (self.command) |cmd| {
+            self.allocator.free(cmd);
+        }
+        self.allocator.free(self.command);
+    }
 };
 
 pub fn launch(
@@ -94,6 +104,7 @@ pub fn launch(
                 .env_count = 0,
                 .setup_time_ms = 0,
                 .error_msg = "No executable found",
+                .allocator = allocator,
             };
         };
         try args.append(allocator, executable);
@@ -105,6 +116,7 @@ pub fn launch(
                 .env_count = 0,
                 .setup_time_ms = 0,
                 .error_msg = try std.fmt.allocPrint(allocator, "Proton not found: {}", .{err}),
+                .allocator = allocator,
             };
         };
         try args.append(allocator, proton_path);
@@ -157,8 +169,18 @@ pub fn launch(
             .command = try allocator.dupe([]const u8, args.items),
             .env_count = env.count(),
             .setup_time_ms = setup_time_ms,
+            .allocator = allocator,
         };
     }
+
+    // Phase 8.5: D-Bus Session Management
+    var session_mgr = dbus.SessionManager.init(allocator);
+    defer session_mgr.deinit();
+
+    // Begin gaming session (power profile, screen saver inhibit, notification)
+    session_mgr.beginGamingSession(game_info.name, app_id) catch |err| {
+        std.log.warn("D-Bus: Failed to begin gaming session: {s}", .{@errorName(err)});
+    };
 
     // Phase 9: Execute using std.process.Child
     std.log.info("Launching game...", .{});
@@ -179,12 +201,17 @@ pub fn launch(
     _ = try child.spawn();
     
     std.log.info("Game launched with PID {d}", .{child.id});
+    
+    // Note: Session cleanup (endGamingSession) should be called by the
+    // daemon/wait requester when the game exits. For now, the session
+    // will persist until manually restored or system handles it.
 
     return LaunchResult{
         .success = true,
         .command = try allocator.dupe([]const u8, args.items),
         .env_count = env.count(),
         .setup_time_ms = setup_time_ms,
+        .allocator = allocator,
     };
 }
 

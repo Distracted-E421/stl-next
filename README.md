@@ -4,7 +4,9 @@ A high-performance Steam game wrapper written in Zig, replacing the 21,000-line 
 
 ## 🎯 Why This Fork Exists
 
-The original SteamTinkerLaunch has a **critical bug unfixed for 6+ months**:
+The original SteamTinkerLaunch has (at the time of writing) has been inactive for over 6 months, and the orginal maintainer does not have the access that they used to
+
+There are also several critical bugs that make certain things/games unplayable. The one that got me and pushed me to fork was this one:
 
 ```bash
 # The Bug: Wine interprets "/" as command switches!
@@ -17,6 +19,7 @@ nxm://stardewvalley/collections/tckf0m
 ```
 
 **STL-Next fixes this** with proper URL encoding:
+
 ```bash
 $ ./stl-next nxm "nxm://stardewvalley/collections/tckf0m/revisions/100"
   Parsed: Collection: stardewvalley/collections/tckf0m/revisions/100
@@ -25,6 +28,10 @@ $ ./stl-next nxm "nxm://stardewvalley/collections/tckf0m/revisions/100"
 ```
 
 See: [STL_URL_TRUNCATION_BUG_REPORT.md](../stardew-modding-nix/STL_URL_TRUNCATION_BUG_REPORT.md)
+
+Additionally, if you look at the code for the orginal STL (and this is not shade, hate, or anything at the original dev or any maintainers, love yall <3), its a brittle, terrifing, 30,000 plus lines of bash. and thats after they did a modular rewrite from a 21,000 line monolit bash script. Bash is great, but not here, where all that overhead is causing it to take a while to start up, or complete actions.
+
+While its def overkill, I have decided to do this rewrite in Zig, to get as small as possible as a binary, as well as if there is any c interop issues with the edge cases like vr, dos games, cross platform stuff, mod managers, winetricks, etc etc.
 
 ## 📊 Project Status
 
@@ -42,7 +49,8 @@ See: [STL_URL_TRUNCATION_BUG_REPORT.md](../stardew-modding-nix/STL_URL_TRUNCATIO
 | Phase 5.7 | ✅ Complete | **Nexus Mods API** - Full v1 client, tracking, Premium downloads |
 | Phase 6 | ✅ Complete | **14 Tinkers**: ReShade, vkBasalt, SpecialK, LatencyFleX, MultiApp, Boxtron, OBS, DLSS, OptiScaler |
 | Phase 7 | ✅ Complete | **Stardrop Integration** + **Nexus Collections Import** (KILLER FEATURE!) |
-| Phase 8 | 📋 Planned | Full MO2 USVFS, VR support, Steam Deck mode |
+| Phase 8 | 🚧 In Progress | **D-Bus Integration** (Multi-GPU!), Session Management |
+| Phase 9 | 📋 Planned | Full MO2 USVFS, VR support, Steam Deck mode |
 
 ### Zig Version
 
@@ -121,6 +129,7 @@ inputs.stl-next.url = "github:e421/stl-next";
 ```
 
 **NixOS Module:**
+
 ```nix
 { stl-next, ... }: {
   imports = [ stl-next.nixosModules.default ];
@@ -132,6 +141,7 @@ inputs.stl-next.url = "github:e421/stl-next";
 ```
 
 **Home Manager Module:**
+
 ```nix
 { stl-next, ... }: {
   imports = [ stl-next.homeManagerModules.default ];
@@ -242,6 +252,7 @@ Unlike the original Bash script, STL-Next has **comprehensive error handling**:
 | **Memory** | Test allocator catches all leaks |
 
 Edge case tests in `src/tests/edge_cases.zig`:
+
 - Collection URL revision preservation (THE BUG FIX)
 - Special characters in mod names
 - Boundary conditions (max AppID, etc.)

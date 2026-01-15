@@ -65,7 +65,7 @@ pub const StardropMod = struct {
             allocator.free(req.unique_id);
             allocator.free(req.name);
         }
-        self.requirements.deinit();
+        self.requirements.deinit(allocator);
     }
 };
 
@@ -80,7 +80,7 @@ pub const StardropProfile = struct {
         for (self.enabled_mod_ids.items) |id| {
             allocator.free(id);
         }
-        self.enabled_mod_ids.deinit();
+        self.enabled_mod_ids.deinit(allocator);
     }
 };
 
@@ -124,7 +124,7 @@ pub const NexusCollection = struct {
         for (self.mods.items) |*mod| {
             mod.deinit(allocator);
         }
-        self.mods.deinit();
+        self.mods.deinit(allocator);
     }
 };
 
@@ -187,8 +187,8 @@ pub const StardropManager = struct {
         return .{
             .allocator = allocator,
             .install = null,
-            .profiles = std.ArrayList(StardropProfile).init(allocator),
-            .mods = std.ArrayList(StardropMod).init(allocator),
+            .profiles = .{},
+            .mods = .{},
             .nexus_client = null,
         };
     }
@@ -200,11 +200,11 @@ pub const StardropManager = struct {
         for (self.profiles.items) |*profile| {
             profile.deinit(self.allocator);
         }
-        self.profiles.deinit();
+        self.profiles.deinit(self.allocator);
         for (self.mods.items) |*mod| {
             mod.deinit(self.allocator);
         }
-        self.mods.deinit();
+        self.mods.deinit(self.allocator);
     }
 
     /// Set Nexus API client for collection imports
@@ -276,7 +276,7 @@ pub const StardropManager = struct {
                     std.log.warn("Stardrop: Failed to load profile {s}: {s}", .{ entry.name, @errorName(err) });
                     continue;
                 };
-                try self.profiles.append(profile);
+                try self.profiles.append(self.allocator, profile);
             }
         }
 
@@ -307,7 +307,7 @@ pub const StardropManager = struct {
         var profile = StardropProfile{
             .name = try self.allocator.dupe(u8, filename[0 .. filename.len - 5]), // Remove .json
             .is_protected = false,
-            .enabled_mod_ids = std.ArrayList([]const u8).init(self.allocator),
+            .enabled_mod_ids = .{},
         };
 
         if (root.object.get("Name")) |n| {
@@ -323,7 +323,7 @@ pub const StardropManager = struct {
             if (mods == .array) {
                 for (mods.array.items) |item| {
                     if (item == .string) {
-                        try profile.enabled_mod_ids.append(try self.allocator.dupe(u8, item.string));
+                        try profile.enabled_mod_ids.append(self.allocator, try self.allocator.dupe(u8, item.string));
                     }
                 }
             }
@@ -391,7 +391,7 @@ pub const StardropManager = struct {
             .game_domain = try self.allocator.dupe(u8, "stardewvalley"),
             .revision = revision orelse 0,
             .mod_count = 0,
-            .mods = std.ArrayList(CollectionMod).init(self.allocator),
+            .mods = .{},
             .created_timestamp = 0,
             .updated_timestamp = 0,
         };
@@ -446,7 +446,7 @@ pub const StardropManager = struct {
         var profile = StardropProfile{
             .name = try self.allocator.dupe(u8, profile_name),
             .is_protected = false,
-            .enabled_mod_ids = std.ArrayList([]const u8).init(self.allocator),
+            .enabled_mod_ids = .{},
         };
         defer profile.deinit(self.allocator);
 
@@ -456,7 +456,7 @@ pub const StardropManager = struct {
             if (progress_callback) |cb| cb(&progress);
 
             // Get mod info
-            const mod_info = client.getModInfo("stardewvalley", mod.nexus_mod_id) catch |err| {
+            var mod_info = client.getMod("stardewvalley", mod.nexus_mod_id) catch |err| {
                 std.log.warn("Stardrop: Failed to get mod info for {s}: {s}", .{ mod.name, @errorName(err) });
                 continue;
             };
@@ -482,22 +482,27 @@ pub const StardropManager = struct {
             };
 
             // Download the mod
-            const download_links = client.getDownloadLinks(
+            const download_links = client.getDownloadLink(
                 "stardewvalley",
                 mod.nexus_mod_id,
                 file_id,
                 null,
                 null,
             ) catch |err| {
-                std.log.warn("Stardrop: Failed to get download links for {s}: {s}", .{ mod.name, @errorName(err) });
+                std.log.warn("Stardrop: Failed to get download link for {s}: {s}", .{ mod.name, @errorName(err) });
                 continue;
             };
             defer {
-                for (download_links) |*link| link.deinit(self.allocator);
+                for (download_links) |*dl| dl.deinit(self.allocator);
                 self.allocator.free(download_links);
             }
 
-            if (download_links.len > 0) {
+            if (download_links.len == 0) {
+                std.log.warn("Stardrop: No download links for {s}", .{mod.name});
+                continue;
+            }
+
+            {
                 const download_url = download_links[0].uri;
 
                 // Download to mods folder
@@ -520,7 +525,7 @@ pub const StardropManager = struct {
                 defer self.allocator.free(manifest_path);
 
                 if (readManifestUniqueId(self.allocator, manifest_path)) |unique_id| {
-                    try profile.enabled_mod_ids.append(unique_id);
+                    try profile.enabled_mod_ids.append(self.allocator, unique_id);
                 }
 
                 progress.downloaded += 1;
@@ -552,17 +557,17 @@ pub const StardropManager = struct {
         var profile = StardropProfile{
             .name = try self.allocator.dupe(u8, name),
             .is_protected = false,
-            .enabled_mod_ids = std.ArrayList([]const u8).init(self.allocator),
+            .enabled_mod_ids = .{},
         };
 
         // Add all enabled mods to the profile
         for (self.mods.items) |mod| {
             if (mod.is_enabled) {
-                try profile.enabled_mod_ids.append(try self.allocator.dupe(u8, mod.unique_id));
+                try profile.enabled_mod_ids.append(self.allocator, try self.allocator.dupe(u8, mod.unique_id));
             }
         }
 
-        try self.profiles.append(profile);
+        try self.profiles.append(self.allocator, profile);
         try self.saveProfile(&profile);
     }
 
@@ -702,12 +707,12 @@ test "profile structure" {
     var profile = StardropProfile{
         .name = try std.testing.allocator.dupe(u8, "Test"),
         .is_protected = false,
-        .enabled_mod_ids = std.ArrayList([]const u8).init(std.testing.allocator),
+        .enabled_mod_ids = .{},
     };
     defer profile.deinit(std.testing.allocator);
 
-    try profile.enabled_mod_ids.append(try std.testing.allocator.dupe(u8, "mod1"));
-    try profile.enabled_mod_ids.append(try std.testing.allocator.dupe(u8, "mod2"));
+    try profile.enabled_mod_ids.append(std.testing.allocator, try std.testing.allocator.dupe(u8, "mod1"));
+    try profile.enabled_mod_ids.append(std.testing.allocator, try std.testing.allocator.dupe(u8, "mod2"));
 
     try std.testing.expectEqual(@as(usize, 2), profile.enabled_mod_ids.items.len);
 }

@@ -356,12 +356,69 @@ pub const GpuConfig = struct {
 };
 
 /// Complete game configuration
+/// Launch profile for per-game GPU/monitor/settings presets (Phase 8)
+/// Allows multiple configurations per game without editing Steam launch options
+pub const LaunchProfile = struct {
+    /// Profile name (e.g., "Arc A770 - Main Monitor", "RTX 2080 - 4K TV")
+    name: []const u8 = "Default",
+
+    /// Profile description
+    description: ?[]const u8 = null,
+
+    /// GPU preference for this profile
+    gpu_preference: GpuPreference = .auto,
+
+    /// Specific GPU index (when gpu_preference is .specific)
+    gpu_index: ?usize = null,
+
+    /// Target monitor name (e.g., "DP-1", "HDMI-A-1") - for suggestions
+    target_monitor: ?[]const u8 = null,
+
+    /// Override launch options (appended to base config)
+    extra_launch_options: ?[]const u8 = null,
+
+    /// Override resolution (for this profile only)
+    resolution_override: ?Resolution = null,
+
+    /// Override Proton version
+    proton_override: ?[]const u8 = null,
+
+    /// Enable specific features for this profile
+    enable_mangohud: ?bool = null,
+    enable_gamescope: ?bool = null,
+    enable_gamemode: ?bool = null,
+
+    /// When true, add this profile as a non-Steam game shortcut
+    create_steam_shortcut: bool = false,
+
+    /// Steam shortcut ID (if created)
+    steam_shortcut_id: ?u32 = null,
+};
+
+/// GPU preference - re-export from dbus module for consistency
+pub const GpuPreference = @import("../dbus/mod.zig").GpuPreference;
+
+/// Resolution override
+pub const Resolution = struct {
+    width: u32,
+    height: u32,
+    refresh_hz: ?u32 = null,
+};
+
 pub const GameConfig = struct {
     app_id: u32,
     name: []const u8 = "Unknown Game",
     use_native: bool = false,
     proton_version: ?[]const u8 = null,
     launch_options: ?[]const u8 = null,
+
+    // === PROFILES (Phase 8) ===
+    /// Active profile name (index into profiles array)
+    active_profile: []const u8 = "Default",
+
+    /// Available launch profiles (GPU/monitor/settings presets)
+    /// First profile is always "Default" with base settings
+    profiles: []const LaunchProfile = &[_]LaunchProfile{.{}},
 
     // Core tinker configurations (Phase 3)
     mangohud: MangoHudConfig = .{},
@@ -386,7 +443,7 @@ pub const GameConfig = struct {
     // Proton/Wine advanced settings
     proton_advanced: ProtonAdvancedConfig = .{},
 
-    // GPU configuration
+    // GPU configuration (base/fallback)
     gpu: GpuConfig = .{},
 
     // Artwork configuration
@@ -394,6 +451,86 @@ pub const GameConfig = struct {
 
     pub fn defaults(app_id: u32) GameConfig {
         return .{ .app_id = app_id };
+    }
+
+    /// Get the currently active profile
+    pub fn getActiveProfile(self: *const GameConfig) ?*const LaunchProfile {
+        for (self.profiles) |*profile| {
+            if (std.mem.eql(u8, profile.name, self.active_profile)) {
+                return profile;
+            }
+        }
+        return if (self.profiles.len > 0) &self.profiles[0] else null;
+    }
+
+    /// Get a profile by name
+    pub fn getProfile(self: *const GameConfig, name: []const u8) ?*const LaunchProfile {
+        for (self.profiles) |*profile| {
+            if (std.mem.eql(u8, profile.name, name)) {
+                return profile;
+            }
+        }
+        return null;
+    }
+    
+    /// Add a new profile (allocates new profiles array)
+    /// Note: This leaks the old profiles array in debug builds. For a CLI tool that
+    /// exits immediately, this is acceptable. For long-running processes, consider
+    /// tracking allocation status.
+    pub fn addProfile(self: *GameConfig, allocator: std.mem.Allocator, profile: LaunchProfile) !void {
+        // Check if profile already exists
+        for (self.profiles) |existing| {
+            if (std.mem.eql(u8, existing.name, profile.name)) {
+                return error.ProfileExists;
+            }
+        }
+        
+        // Create new profiles array with the added profile
+        const new_profiles = try allocator.alloc(LaunchProfile, self.profiles.len + 1);
+        @memcpy(new_profiles[0..self.profiles.len], self.profiles);
+        new_profiles[self.profiles.len] = profile;
+        
+        // Update profiles pointer
+        self.profiles = new_profiles;
+    }
+    
+    /// Remove a profile by name
+    pub fn removeProfile(self: *GameConfig, allocator: std.mem.Allocator, name: []const u8) !void {
+        if (std.mem.eql(u8, name, "Default")) {
+            return error.CannotRemoveDefault;
+        }
+        
+        // Find the profile index
+        var found_idx: ?usize = null;
+        for (self.profiles, 0..) |profile, i| {
+            if (std.mem.eql(u8, profile.name, name)) {
+                found_idx = i;
+                break;
+            }
+        }
+        
+        const idx = found_idx orelse return error.ProfileNotFound;
+        
+        // Create new array without the removed profile
+        if (self.profiles.len == 1) {
+            return error.CannotRemoveLastProfile;
+        }
+        
+        var new_profiles = try allocator.alloc(LaunchProfile, self.profiles.len - 1);
+        var j: usize = 0;
+        for (self.profiles, 0..) |profile, i| {
+            if (i != idx) {
+                new_profiles[j] = profile;
+                j += 1;
+            }
+        }
+        
+        // If active profile was removed, switch to first
+        if (std.mem.eql(u8, self.active_profile, name)) {
+            self.active_profile = new_profiles[0].name;
+        }
+        
+        self.profiles = new_profiles;
     }
 };
 
@@ -443,13 +580,13 @@ pub fn loadGameConfig(allocator: std.mem.Allocator, app_id: u32) !GameConfig {
 
     // Parse JSON properly
     var config = GameConfig.defaults(app_id);
-    
+
     var parsed = json.parseFromSlice(json.Value, allocator, content, .{}) catch |err| {
         std.log.warn("Config: Failed to parse JSON for AppID {d}: {}", .{ app_id, err });
         return config;
     };
     defer parsed.deinit();
-    
+
     const root = parsed.value;
     if (root != .object) {
         std.log.warn("Config: Root is not an object for AppID {d}", .{app_id});
@@ -535,6 +672,98 @@ pub fn loadGameConfig(allocator: std.mem.Allocator, app_id: u32) !GameConfig {
         }
     }
 
+    // Parse active_profile
+    if (obj.get("active_profile")) |v| {
+        if (v == .string) config.active_profile = try allocator.dupe(u8, v.string);
+    }
+
+    // Parse profiles array
+    if (obj.get("profiles")) |profiles_val| {
+        if (profiles_val == .array) {
+            const profiles_array = profiles_val.array;
+            var profiles_list = try allocator.alloc(LaunchProfile, profiles_array.items.len);
+            
+            for (profiles_array.items, 0..) |profile_val, i| {
+                if (profile_val != .object) continue;
+                const profile_obj = profile_val.object;
+                
+                var profile = LaunchProfile{
+                    .name = "Unnamed",
+                    .gpu_preference = .auto,
+                    .gpu_index = null,
+                    .target_monitor = null,
+                    .resolution_override = null,
+                    .enable_mangohud = null,
+                    .enable_gamescope = null,
+                    .enable_gamemode = null,
+                    .create_steam_shortcut = false,
+                };
+                
+                if (profile_obj.get("name")) |v| {
+                    if (v == .string) profile.name = try allocator.dupe(u8, v.string);
+                }
+                if (profile_obj.get("gpu_preference")) |v| {
+                    if (v == .string) {
+                        const pref_str = v.string;
+                        if (std.mem.eql(u8, pref_str, "nvidia")) {
+                            profile.gpu_preference = .nvidia;
+                        } else if (std.mem.eql(u8, pref_str, "amd")) {
+                            profile.gpu_preference = .amd;
+                        } else if (std.mem.eql(u8, pref_str, "intel_arc")) {
+                            profile.gpu_preference = .intel_arc;
+                        } else if (std.mem.eql(u8, pref_str, "integrated")) {
+                            profile.gpu_preference = .integrated;
+                        } else if (std.mem.eql(u8, pref_str, "discrete")) {
+                            profile.gpu_preference = .discrete;
+                        } else if (std.mem.eql(u8, pref_str, "specific")) {
+                            profile.gpu_preference = .specific;
+                        }
+                    }
+                }
+                if (profile_obj.get("gpu_index")) |v| {
+                    if (v == .integer) profile.gpu_index = @intCast(v.integer);
+                }
+                if (profile_obj.get("target_monitor")) |v| {
+                    if (v == .string) profile.target_monitor = try allocator.dupe(u8, v.string);
+                }
+                
+                // Parse resolution
+                const res_width = profile_obj.get("resolution_width");
+                const res_height = profile_obj.get("resolution_height");
+                if (res_width != null and res_height != null) {
+                    if (res_width.? == .integer and res_height.? == .integer) {
+                        var res = Resolution{
+                            .width = @intCast(res_width.?.integer),
+                            .height = @intCast(res_height.?.integer),
+                            .refresh_hz = null,
+                        };
+                        if (profile_obj.get("resolution_refresh_hz")) |v| {
+                            if (v == .integer) res.refresh_hz = @intCast(v.integer);
+                        }
+                        profile.resolution_override = res;
+                    }
+                }
+                
+                if (profile_obj.get("enable_mangohud")) |v| {
+                    if (v == .bool) profile.enable_mangohud = v.bool;
+                }
+                if (profile_obj.get("enable_gamescope")) |v| {
+                    if (v == .bool) profile.enable_gamescope = v.bool;
+                }
+                if (profile_obj.get("enable_gamemode")) |v| {
+                    if (v == .bool) profile.enable_gamemode = v.bool;
+                }
+                if (profile_obj.get("create_steam_shortcut")) |v| {
+                    if (v == .bool) profile.create_steam_shortcut = v.bool;
+                }
+                
+                profiles_list[i] = profile;
+            }
+            
+            config.profiles = profiles_list;
+        }
+    }
+
     std.log.info("Config: Loaded for AppID {d}", .{app_id});
     return config;
 }
@@ -567,7 +796,7 @@ pub fn saveGameConfig(allocator: std.mem.Allocator, config: *const GameConfig) !
 
     // Zig 0.15.x: Use bufPrint + writeAll pattern
     var buf: [4096]u8 = undefined;
-    
+
     try file.writeAll("{\n");
     try file.writeAll(try std.fmt.bufPrint(&buf, "  \"app_id\": {d},\n", .{config.app_id}));
     try file.writeAll(try std.fmt.bufPrint(&buf, "  \"use_native\": {s},\n", .{if (config.use_native) "true" else "false"}));
@@ -594,7 +823,49 @@ pub fn saveGameConfig(allocator: std.mem.Allocator, config: *const GameConfig) !
     try file.writeAll("  \"gamemode\": {\n");
     try file.writeAll(try std.fmt.bufPrint(&buf, "    \"enabled\": {s},\n", .{if (config.gamemode.enabled) "true" else "false"}));
     try file.writeAll(try std.fmt.bufPrint(&buf, "    \"renice\": {d}\n", .{config.gamemode.renice}));
-    try file.writeAll("  }\n");
+    try file.writeAll("  },\n");
+
+    // Active profile
+    try file.writeAll(try std.fmt.bufPrint(&buf, "  \"active_profile\": \"{s}\",\n", .{config.active_profile}));
+
+    // Profiles array
+    try file.writeAll("  \"profiles\": [\n");
+    for (config.profiles, 0..) |profile, i| {
+        try file.writeAll("    {\n");
+        try file.writeAll(try std.fmt.bufPrint(&buf, "      \"name\": \"{s}\",\n", .{profile.name}));
+        try file.writeAll(try std.fmt.bufPrint(&buf, "      \"gpu_preference\": \"{s}\",\n", .{@tagName(profile.gpu_preference)}));
+        
+        if (profile.gpu_index) |idx| {
+            try file.writeAll(try std.fmt.bufPrint(&buf, "      \"gpu_index\": {d},\n", .{idx}));
+        }
+        if (profile.target_monitor) |mon| {
+            try file.writeAll(try std.fmt.bufPrint(&buf, "      \"target_monitor\": \"{s}\",\n", .{mon}));
+        }
+        if (profile.resolution_override) |res| {
+            try file.writeAll(try std.fmt.bufPrint(&buf, "      \"resolution_width\": {d},\n", .{res.width}));
+            try file.writeAll(try std.fmt.bufPrint(&buf, "      \"resolution_height\": {d},\n", .{res.height}));
+            if (res.refresh_hz) |hz| {
+                try file.writeAll(try std.fmt.bufPrint(&buf, "      \"resolution_refresh_hz\": {d},\n", .{hz}));
+            }
+        }
+        if (profile.enable_mangohud) |mh| {
+            try file.writeAll(try std.fmt.bufPrint(&buf, "      \"enable_mangohud\": {s},\n", .{if (mh) "true" else "false"}));
+        }
+        if (profile.enable_gamescope) |gs| {
+            try file.writeAll(try std.fmt.bufPrint(&buf, "      \"enable_gamescope\": {s},\n", .{if (gs) "true" else "false"}));
+        }
+        if (profile.enable_gamemode) |gm| {
+            try file.writeAll(try std.fmt.bufPrint(&buf, "      \"enable_gamemode\": {s},\n", .{if (gm) "true" else "false"}));
+        }
+        try file.writeAll(try std.fmt.bufPrint(&buf, "      \"create_steam_shortcut\": {s}\n", .{if (profile.create_steam_shortcut) "true" else "false"}));
+        
+        if (i < config.profiles.len - 1) {
+            try file.writeAll("    },\n");
+        } else {
+            try file.writeAll("    }\n");
+        }
+    }
+    try file.writeAll("  ]\n");
 
     try file.writeAll("}\n");
 

@@ -75,7 +75,7 @@ This document tracks feature parity with the original SteamTinkerLaunch and plan
 | DLSS Tweaks | ❌ | ✅ | Quality presets, Frame Gen, Reflex |
 | OptiScaler | ❌ | ✅ | Universal upscaler (FSR 3.1, XeSS) |
 
-### ✅ Phase 7: Stardrop & Collections (In Progress)
+### ✅ Phase 7: Stardrop & Collections (Complete)
 
 | Feature | Original STL | STL-Next | Notes |
 |---------|-------------|----------|-------|
@@ -83,6 +83,23 @@ This document tracks feature parity with the original SteamTinkerLaunch and plan
 | Nexus Collections Import | ❌ | ✅ | **KILLER FEATURE** |
 | Profile Management | ❌ | ✅ | Import/export Stardrop profiles |
 | Collections API | ❌ | ✅ | GraphQL v2 client |
+
+### CLI Commands (Phase 7)
+
+```bash
+# Stardrop integration
+stl-next stardrop              # Show Stardrop help
+stl-next stardrop-discover     # Find Stardrop installation
+stl-next stardrop-profiles     # List profiles
+stl-next stardrop-create       # Create new profile
+stl-next stardrop-export       # Export profile to JSON
+
+# Nexus Collections (KILLER FEATURE!)
+stl-next collection            # Show collection help
+stl-next collection-info       # Show collection metadata
+stl-next collection-import     # Import collection to Stardrop
+stl-next collection-list       # List popular collections
+```
 
 ## Bugs Fixed vs Original STL
 
@@ -287,6 +304,45 @@ Based on GitHub issues from `sonic2kk/steamtinkerlaunch`:
 2. D-Bus integration
 3. Plugin system
 4. ProtonDB integration
+
+## 🚀 Phase 8: D-Bus Integration + Profiles (IN PROGRESS)
+
+**KILLER FEATURE for multi-GPU systems!**
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| **GPU Selection** | switcheroo-control D-Bus for PRIME offload | 🔴 HIGH |
+| **Power Profiles** | Auto-switch to performance mode | 🔴 HIGH |
+| **Screen Saver Inhibit** | Prevent lock during gaming | 🟡 MEDIUM |
+| **Desktop Notifications** | Rich game launch/exit notifications | 🟡 MEDIUM |
+| **GameMode D-Bus** | Native D-Bus instead of library | 🟢 LOW |
+| **Session Inhibit** | Prevent accidental logout | 🟢 LOW |
+
+### Why D-Bus?
+
+Steam doesn't always handle multi-GPU gracefully. D-Bus integration allows:
+
+1. **Per-game GPU selection** - Force discrete GPU for demanding games
+2. **Automatic power profile** - Performance mode during gaming
+3. **Proper session handling** - No screen lock mid-boss-fight
+4. **Desktop integration** - Notifications when games launch/crash
+
+### Multi-GPU Environment Variables (Auto-set)
+
+```bash
+# For NVIDIA discrete:
+__NV_PRIME_RENDER_OFFLOAD=1
+__VK_LAYER_NV_optimus=NVIDIA_only
+__GLX_VENDOR_LIBRARY_NAME=nvidia
+
+# For Intel Arc:
+MESA_VK_DEVICE_SELECT=8086:56a0
+DRI_PRIME=pci-0000_03_00_0
+```
+
+See: [DBUS_INTEGRATION.md](DBUS_INTEGRATION.md)
+
+---
 
 ## Contributing
 
