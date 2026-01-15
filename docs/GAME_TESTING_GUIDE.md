@@ -79,11 +79,56 @@ stl-next launch 413150
 ```
 
 **Pass Criteria**:
+
 - [ ] Game window appears
 - [ ] No errors in log
 - [ ] Game is playable
 
-#### TC-SDV-002: SMAPI Integration
+## ✨ Phase 4 Features
+
+### IPC Daemon/Client Architecture
+
+```bash
+# Terminal 1: Start the wait requester daemon
+$ ./stl-next wait 413150
+╔════════════════════════════════════════════╗
+║      STL-NEXT WAIT REQUESTER v0.4.0-alpha  ║
+╚════════════════════════════════════════════╝
+Game: Stardew Valley
+IPC Server: Listening on /run/user/1000/stl-next-413150.sock
+Wait Requester: 10s remaining...
+
+# Terminal 2: Connect with TUI client
+$ ./stl-next tui 413150
+```
+
+### NXM Protocol Handler
+
+```bash
+$ ./stl-next nxm "nxm://stardewvalley/mods/12345/files/67890"
+NXM Handler: nxm://stardewvalley/mods/12345/files/67890
+  Game: stardewvalley
+  Mod ID: 12345
+  File ID: 67890
+```
+
+### TUI (Terminal User Interface)
+
+```
+╔════════════════════════════════════════════════════════════════════╗
+║                    STL-NEXT WAIT REQUESTER                         ║
+╠════════════════════════════════════════════════════════════════════╣
+║ Game: Stardew Valley                                               ║
+║ AppID: 413150                                                      ║
+╠════════════════════════════════════════════════════════════════════╣
+║ Commands:                                                          ║
+║   [P] Pause countdown    [R] Resume countdown                      ║
+║   [L] Launch now         [Q] Quit/Abort                            ║
+║   [M] Toggle MangoHud    [G] Toggle Gamescope                      ║
+╚════════════════════════════════════════════════════════════════════╝
+
+⏱️  Launching in... 8s [████████░░]
+```
 
 **Purpose**: Verify script extender detection and launch
 
@@ -101,6 +146,7 @@ stl-next launch 413150
 ```
 
 **Pass Criteria**:
+
 - [ ] SMAPI console visible
 - [ ] Console shows "SMAPI 4.x.x loaded"
 - [ ] No mod errors in SMAPI console
@@ -123,6 +169,7 @@ stl-next test-nxm "nxm://stardewvalley/collections/tckf0m/revisions/100"
 ```
 
 **Pass Criteria**:
+
 - [ ] Mod links parse correctly
 - [ ] Collection links preserve `/revisions/N` segment
 - [ ] Wine-encoded URLs contain `%2F` instead of `/`
@@ -142,6 +189,7 @@ stl-next stardrop-profiles
 ```
 
 **Pass Criteria**:
+
 - [ ] Stardrop path detected (if installed)
 - [ ] Profiles listed correctly
 
@@ -164,6 +212,7 @@ stl-next run 413150 --profile "Modded"
 ```
 
 **Pass Criteria**:
+
 - [ ] Profiles created successfully
 - [ ] Profiles listed with correct settings
 - [ ] Game launches with profile-specific settings
@@ -196,6 +245,7 @@ stl-next launch 489830
 ```
 
 **Pass Criteria**:
+
 - [ ] Bethesda logo plays
 - [ ] Main menu appears
 - [ ] No Proton errors
@@ -215,6 +265,7 @@ stl-next launch 489830
 ```
 
 **Pass Criteria**:
+
 - [ ] FPS counter visible
 - [ ] No performance regression
 - [ ] Game still playable
@@ -242,6 +293,7 @@ stl-next launch 489830
 ```
 
 **Pass Criteria**:
+
 - [ ] Correct Proton version used (check log)
 - [ ] Game launches successfully
 
@@ -265,6 +317,7 @@ stl-next launch 377160
 ```
 
 **Pass Criteria**:
+
 - [ ] Game launches
 - [ ] Creation Club doesn't cause issues
 
@@ -309,6 +362,7 @@ stl-next launch 1091500
 ```
 
 **Pass Criteria**:
+
 - [ ] REDLauncher appears (or bypassed)
 - [ ] Game loads to main menu
 - [ ] No GPU driver issues
@@ -336,6 +390,7 @@ stl-next launch 1091500
 ```
 
 **Pass Criteria**:
+
 - [ ] FPS counter shows reasonable values
 - [ ] No significant performance drop from overlay
 
@@ -501,4 +556,3 @@ zig build test -- --test-filter "edge"
 # Run NXM tests
 zig build test -- --test-filter "NXM"
 ```
-
