@@ -2,6 +2,80 @@
 
 All notable changes to STL-Next are documented in this file.
 
+## [0.7.0-alpha] - Phase 7: Stardrop Integration & Nexus Collections
+
+### Added
+
+#### Stardrop Integration (`src/modding/stardrop.zig`) - THE KILLER FEATURE!
+
+First-class integration with Stardrop mod manager for Stardew Valley:
+
+**Auto-Discovery**
+- Scans common Stardrop installation paths
+- Supports `STARDROP_PATH` environment variable
+- Detects settings.json, profiles folder, mods folder
+
+**Profile Management**
+- Load/save Stardrop profiles (JSON format)
+- Create new profiles from enabled mods
+- Export profiles for sharing
+- Import profiles from other installations
+
+**Nexus Collections Import** 🎉
+- Fetch collection metadata from Nexus GraphQL API
+- Download all mods in a collection
+- Automatically extract and install to Stardrop
+- Create Stardrop profile from collection
+- Progress callback for UI integration
+- Handles optional mods, categories
+
+**Data Structures**
+- `StardropMod` - Matches Stardrop's Mod.cs
+- `StardropProfile` - Matches Stardrop's Profile.cs
+- `NexusCollection` - Full collection metadata
+- `CollectionMod` - Individual mod in collection
+- `ImportProgress` - Progress tracking for imports
+
+#### Nexus Collections API (`src/api/nexus_collections.zig`)
+
+New GraphQL client for Nexus Mods Collections API:
+
+- `CollectionsClient` - GraphQL v2 API client
+- `Collection` - Full collection with all metadata
+- `CollectionMod` - Mod entry with file pinning
+- `CollectionRevision` - Revision tracking
+- Fetches: slug, name, author, mods, images, endorsements
+
+### Changed
+
+- `ModManager` enum now includes `Stardrop`
+- `src/modding/manager.zig` exports stardrop module
+- Updated feature roadmap for Phase 7
+
+### CLI Commands (Planned)
+
+```bash
+# Stardrop integration
+stl-next stardrop discover           # Find Stardrop installation
+stl-next stardrop profiles           # List profiles
+stl-next stardrop create-profile     # Create new profile
+stl-next stardrop export-profile     # Export profile to file
+
+# Nexus Collections (KILLER FEATURE)
+stl-next collection info <slug>      # Show collection info
+stl-next collection import <slug>    # Import collection to Stardrop
+stl-next collection list <game>      # List popular collections
+```
+
+### Technical
+
+- GraphQL query construction for Nexus v2 API
+- curl subprocess for HTTP requests (avoids Zig HTTP complexity)
+- SMAPI manifest.json parsing for UniqueId extraction
+- patool fallback to unzip for archive extraction
+
+---
+
 ## [0.6.1-alpha] - Phase 6 Complete: All Advanced Tinkers
 
 ### Added

@@ -1,8 +1,9 @@
 const std = @import("std");
 pub const vortex = @import("vortex.zig");
+pub const stardrop = @import("stardrop.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MOD MANAGER INTEGRATION (Phase 4 - Hardened)
+// MOD MANAGER INTEGRATION (Phase 7 - Stardrop + Collections)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // IMPORTANT: This module exists because of bugs like the STL URL truncation issue
@@ -12,8 +13,10 @@ pub const vortex = @import("vortex.zig");
 //
 // Supports:
 //   - Vortex (via Wine/Proton)
-//   - MO2 (via Wine/Proton)
+//   - MO2 (via Wine/Proton)  
+//   - Stardrop (native Linux) - RECOMMENDED for Stardew Valley
 //   - Direct NXM download handling
+//   - Nexus Collections Import (KILLER FEATURE!)
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -21,6 +24,7 @@ pub const ModManager = enum {
     None,
     MO2,
     Vortex,
+    Stardrop,
     Custom,
 };
 

@@ -75,6 +75,15 @@ This document tracks feature parity with the original SteamTinkerLaunch and plan
 | DLSS Tweaks | ❌ | ✅ | Quality presets, Frame Gen, Reflex |
 | OptiScaler | ❌ | ✅ | Universal upscaler (FSR 3.1, XeSS) |
 
+### ✅ Phase 7: Stardrop & Collections (In Progress)
+
+| Feature | Original STL | STL-Next | Notes |
+|---------|-------------|----------|-------|
+| Stardrop Integration | ❌ | ✅ | Native Linux mod manager |
+| Nexus Collections Import | ❌ | ✅ | **KILLER FEATURE** |
+| Profile Management | ❌ | ✅ | Import/export Stardrop profiles |
+| Collections API | ❌ | ✅ | GraphQL v2 client |
+
 ## Bugs Fixed vs Original STL
 
 ### 🐛 Critical: NXM URL Truncation (Issue #1242)

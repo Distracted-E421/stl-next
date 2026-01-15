@@ -41,7 +41,8 @@ See: [STL_URL_TRUNCATION_BUG_REPORT.md](../stardew-modding-nix/STL_URL_TRUNCATIO
 | Phase 5.6 | ✅ Complete | **Vortex Integration** - Auto-discovery, NXM forwarding |
 | Phase 5.7 | ✅ Complete | **Nexus Mods API** - Full v1 client, tracking, Premium downloads |
 | Phase 6 | ✅ Complete | **14 Tinkers**: ReShade, vkBasalt, SpecialK, LatencyFleX, MultiApp, Boxtron, OBS, DLSS, OptiScaler |
-| Phase 7 | 📋 Planned | Full MO2 USVFS, Stardrop integration, VR support |
+| Phase 7 | ✅ Complete | **Stardrop Integration** + **Nexus Collections Import** (KILLER FEATURE!) |
+| Phase 8 | 📋 Planned | Full MO2 USVFS, VR support, Steam Deck mode |
 
 ### Zig Version
 
