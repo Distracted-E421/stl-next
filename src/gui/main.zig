@@ -20,7 +20,6 @@ const ipc = @import("ipc.zig");
 // Window dimensions - defaults (window is resizable)
 const DEFAULT_WIDTH: i32 = 800;
 const DEFAULT_HEIGHT: i32 = 580;
-var scale_factor: f32 = 1.0;
 
 // Font sizes - larger for readability
 const FONT_TINY = 14;
@@ -132,13 +131,10 @@ const AppState = struct {
 
 var state: AppState = .{};
 
-// Helper function to get properly scaled mouse position
-fn getScaledMousePos() ray.Vector2 {
-    const raw = ray.GetMousePosition();
-    return ray.Vector2{
-        .x = raw.x * scale_factor,
-        .y = raw.y * scale_factor,
-    };
+// Helper function to get mouse position
+// Note: On Wayland with some compositors, mouse coordinates may need adjustment
+fn getMouse() ray.Vector2 {
+    return ray.GetMousePosition();
 }
 
 // Helper to get current window width (for responsive layout)
@@ -194,19 +190,10 @@ pub fn main() !void {
     ray.SetWindowMinSize(640, 480);
     defer ray.CloseWindow();
 
-    // Detect DPI scaling for mouse coordinate correction
     const monitor = ray.GetCurrentMonitor();
     const mon_width = ray.GetMonitorWidth(monitor);
     const mon_height = ray.GetMonitorHeight(monitor);
-
-    // On HiDPI displays, we may need to adjust coordinates
-    // Check if render size differs from screen size
-    const render_width = ray.GetRenderWidth();
-    const screen_width = ray.GetScreenWidth();
-    if (render_width != screen_width and screen_width > 0) {
-        scale_factor = @as(f32, @floatFromInt(render_width)) / @as(f32, @floatFromInt(screen_width));
-    }
-
+    
     // Try to center window (may not work on Wayland)
     ray.SetWindowPosition(
         @divTrunc(mon_width - DEFAULT_WIDTH, 2),
@@ -255,7 +242,7 @@ pub fn main() !void {
 
 fn updateTooltipTimer(dt: f32) void {
     if (state.last_hover_rect) |rect| {
-        if (ray.CheckCollisionPointRec(getScaledMousePos(), rect)) {
+        if (ray.CheckCollisionPointRec(getMouse(), rect)) {
             state.hover_timer += dt;
             if (state.hover_timer > 0.5 and !state.tooltip.visible) {
                 // Show tooltip after 0.5s hover
@@ -313,7 +300,7 @@ fn handleInput() void {
 
 fn drawTitleBar() void {
     const w = getWidth();
-    const mouse = getScaledMousePos();
+    const mouse = getMouse();
 
     // Background
     ray.DrawRectangle(0, 0, w, 50, Colors.mantle);
@@ -435,7 +422,7 @@ fn drawTinkersSection() void {
             .height = row_height - 6,
         };
 
-        const hover = ray.CheckCollisionPointRec(getScaledMousePos(), rect);
+        const hover = ray.CheckCollisionPointRec(getMouse(), rect);
 
         // Background
         const bg = if (tinker.enabled)
@@ -506,7 +493,7 @@ fn drawActionsSection() void {
             .width = btn_width,
             .height = btn_height,
         };
-        const hover = ray.CheckCollisionPointRec(getScaledMousePos(), rect);
+        const hover = ray.CheckCollisionPointRec(getMouse(), rect);
 
         ray.DrawRectangleRounded(rect, 0.2, 8, if (hover) Colors.green else Colors.surface1);
         ray.DrawRectangleRoundedLinesEx(rect, 0.2, 8, 2, Colors.green);
@@ -531,7 +518,7 @@ fn drawActionsSection() void {
             .width = btn_width,
             .height = btn_height,
         };
-        const hover = ray.CheckCollisionPointRec(getScaledMousePos(), rect);
+        const hover = ray.CheckCollisionPointRec(getMouse(), rect);
 
         const btn_color = if (state.paused) Colors.green else Colors.yellow;
         ray.DrawRectangleRounded(rect, 0.2, 8, if (hover) btn_color else Colors.surface1);
@@ -562,7 +549,7 @@ fn drawActionsSection() void {
             .width = btn_width,
             .height = btn_height,
         };
-        const hover = ray.CheckCollisionPointRec(getScaledMousePos(), rect);
+        const hover = ray.CheckCollisionPointRec(getMouse(), rect);
 
         ray.DrawRectangleRounded(rect, 0.2, 8, if (hover) Colors.red else Colors.surface1);
         ray.DrawRectangleRoundedLinesEx(rect, 0.2, 8, 2, Colors.red);
@@ -638,7 +625,7 @@ fn drawTooltip() void {
     ray.DrawText(&text_buf, x + padding, y + 8, FONT_SMALL, Colors.text);
 
     // Clear tooltip if mouse moved significantly
-    const mouse = getScaledMousePos();
+    const mouse = getMouse();
     const dx = @abs(mouse.x - @as(f32, @floatFromInt(state.tooltip.x - 15)));
     const dy = @abs(mouse.y - @as(f32, @floatFromInt(state.tooltip.y - 15)));
     if (dx > 100 or dy > 100) {

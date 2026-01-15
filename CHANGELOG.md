@@ -7,6 +7,7 @@ All notable changes to STL-Next are documented in this file.
 ### Fixed
 
 #### GUI Improvements
+
 - **Mouse tracking crash** - Fixed infinite recursion in `getScaledMousePos()` that caused immediate segfault
 - **Resizable window** - Window is now resizable with 640x480 minimum size
 - **Dynamic layout** - UI elements scale with window size using `getWidth()`/`getHeight()` helpers
@@ -15,6 +16,7 @@ All notable changes to STL-Next are documented in this file.
 ### Added
 
 #### Vortex Mod Manager Integration (`src/modding/vortex.zig`)
+
 - **Auto-discovery** in common Wine prefix locations:
   - Steam Proton prefixes (`~/.local/share/Steam/steamapps/compatdata/`)
   - Lutris Wine prefixes (`~/.local/share/lutris/runners/wine/`)
