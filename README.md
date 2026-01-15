@@ -38,7 +38,8 @@ See: [STL_URL_TRUNCATION_BUG_REPORT.md](../stardew-modding-nix/STL_URL_TRUNCATIO
 | Phase 4.5 | ✅ Complete | **Winetricks**, Custom Commands, Non-Steam Games, SteamGridDB |
 | Phase 5 | ✅ Complete | **Nix Flake Packaging**, NixOS/Home Manager Modules |
 | Phase 5.5 | ✅ Complete | **Raylib GUI** - Modern Wait Requester |
-| Phase 6 | 📋 Planned | Full MO2/Vortex integration, ReShade |
+| Phase 5.6 | ✅ Complete | **Vortex Integration** - Auto-discovery, NXM forwarding |
+| Phase 6 | 📋 Planned | Full MO2 USVFS, ReShade, VR support |
 
 ### Zig Version
 
@@ -181,8 +182,9 @@ src/
 ├── ui/                   # Phase 4: NEW
 │   ├── daemon.zig        # Wait requester daemon
 │   └── tui.zig           # Terminal UI client
-└── modding/              # Phase 4: NEW
-    └── manager.zig       # MO2/Vortex + NXM handler
+└── modding/              # Phase 4+: Mod Manager Integration
+    ├── manager.zig       # MO2/Vortex coordinator + NXM handler
+    └── vortex.zig        # Vortex auto-discovery + NXM forwarding
 ```
 
 ## 🎮 New CLI Commands (Phase 4)
@@ -229,9 +231,10 @@ Edge case tests in `src/tests/edge_cases.zig`:
 
 ## 🔜 Phase 5 Roadmap
 
-- [ ] Raylib-based graphical Wait-Requester
+- [x] Raylib-based graphical Wait-Requester
+- [x] Vortex auto-discovery and NXM forwarding
 - [ ] Full MO2 USVFS injection
-- [ ] Vortex download integration
+- [ ] Vortex download queue integration
 - [ ] ReShade with hash-based updates
 - [ ] Steam Deck gamepad support
 

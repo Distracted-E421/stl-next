@@ -2,6 +2,47 @@
 
 All notable changes to STL-Next are documented in this file.
 
+## [0.5.4-alpha] - GUI Fixes + Vortex Integration
+
+### Fixed
+
+#### GUI Improvements
+- **Mouse tracking crash** - Fixed infinite recursion in `getScaledMousePos()` that caused immediate segfault
+- **Resizable window** - Window is now resizable with 640x480 minimum size
+- **Dynamic layout** - UI elements scale with window size using `getWidth()`/`getHeight()` helpers
+- **HiDPI support** - Added scale factor detection for proper mouse coordinates on high-DPI displays
+
+### Added
+
+#### Vortex Mod Manager Integration (`src/modding/vortex.zig`)
+- **Auto-discovery** in common Wine prefix locations:
+  - Steam Proton prefixes (`~/.local/share/Steam/steamapps/compatdata/`)
+  - Lutris Wine prefixes (`~/.local/share/lutris/runners/wine/`)
+  - Standard Wine prefix (`~/.wine`)
+- **VortexInfo struct** - Installation path, Wine prefix, staging dir, AppData path
+- **VortexGameConfig** - Per-game mod paths and staging folders
+- **NXM link forwarding** - Forward links to running Vortex instance
+- **AppData sync** - rsync-based sync between Wine and host
+- **Process detection** - Check if Vortex is currently running
+- **URL encoding** - Proper encoding for Wine command-line compatibility
+
+### Usage
+
+```zig
+const vortex = @import("modding/manager.zig").vortex;
+
+var v = vortex.Vortex.init(allocator);
+defer v.deinit();
+
+// Discover Vortex
+const info = try v.discover();
+
+// Forward NXM link
+try v.forwardNxmLink("nxm://stardewvalley/mods/123/files/456");
+```
+
+---
+
 ## [0.5.3-alpha] - Phase 5.5: Raylib GUI
 
 ### Added
