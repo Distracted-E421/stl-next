@@ -36,7 +36,13 @@ See: [STL_URL_TRUNCATION_BUG_REPORT.md](../stardew-modding-nix/STL_URL_TRUNCATIO
 | Phase 3.5 | ✅ Complete | Launch Options, JSON parsing, exec(), tests |
 | Phase 4 | ✅ Complete | **IPC Daemon**, Wait Requester, NXM Handler, TUI |
 | Phase 4.5 | ✅ Complete | **Winetricks**, Custom Commands, Non-Steam Games, SteamGridDB |
-| Phase 5 | 🚧 Next | Raylib GUI, Full MO2/Vortex integration |
+| Phase 5 | ✅ Complete | **Nix Flake Packaging**, NixOS/Home Manager Modules |
+| Phase 5.5 | 🚧 Next | Raylib GUI |
+| Phase 6 | 📋 Planned | Full MO2/Vortex integration, ReShade |
+
+### Zig Version
+
+STL-Next is built with **Zig 0.15.2** (latest stable). The Raylib GUI is next in the roadmap.
 
 ## ✨ Phase 4 Features
 
@@ -100,6 +106,40 @@ All operations < 100ms ✓
 ```
 
 ## 📦 Installation
+
+### NixOS / Home Manager (Recommended)
+
+Add to your flake inputs:
+
+```nix
+inputs.stl-next.url = "github:e421/stl-next";
+# Or local: inputs.stl-next.url = "path:/path/to/stl-next";
+```
+
+**NixOS Module:**
+```nix
+{ stl-next, ... }: {
+  imports = [ stl-next.nixosModules.default ];
+  programs.stl-next = {
+    enable = true;
+    registerNxmHandler = true;
+  };
+}
+```
+
+**Home Manager Module:**
+```nix
+{ stl-next, ... }: {
+  imports = [ stl-next.homeManagerModules.default ];
+  programs.stl-next = {
+    enable = true;
+    countdownSeconds = 10;
+    defaultTinkers.gamemode = true;
+  };
+}
+```
+
+### Development / Manual Build
 
 ```bash
 git clone https://github.com/e421/stl-next

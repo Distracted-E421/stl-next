@@ -77,8 +77,8 @@ pub fn launch(
     try env.put("STEAM_COMPAT_DATA_PATH", prefix_path);
 
     // Phase 6: Build argument list
-    var args = std.ArrayList([]const u8).init(allocator);
-    defer args.deinit();
+    var args: std.ArrayList([]const u8) = .{};
+    defer args.deinit(allocator);
 
     if (game_config.use_native or game_info.proton_version == null) {
         const executable = game_info.executable orelse {
@@ -90,7 +90,7 @@ pub fn launch(
                 .error_msg = "No executable found",
             };
         };
-        try args.append(executable);
+        try args.append(allocator, executable);
     } else {
         const proton_path = findProtonBinary(allocator, steam_engine, game_info.proton_version) catch |err| {
             return LaunchResult{
@@ -101,21 +101,21 @@ pub fn launch(
                 .error_msg = try std.fmt.allocPrint(allocator, "Proton not found: {}", .{err}),
             };
         };
-        try args.append(proton_path);
-        try args.append("run");
+        try args.append(allocator, proton_path);
+        try args.append(allocator, "run");
         if (game_info.executable) |exe| {
-            try args.append(exe);
+            try args.append(allocator, exe);
         }
     }
 
     for (extra_args) |arg| {
-        try args.append(arg);
+        try args.append(allocator, arg);
     }
 
     if (game_config.launch_options) |opts| {
         var iter = std.mem.splitScalar(u8, opts, ' ');
         while (iter.next()) |opt| {
-            if (opt.len > 0) try args.append(opt);
+            if (opt.len > 0) try args.append(allocator, opt);
         }
     }
 

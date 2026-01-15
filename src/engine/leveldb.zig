@@ -155,10 +155,10 @@ pub const SteamCollections = struct {
 
     fn parseGameData(self: *Self, json_data: []const u8) !GameData {
         var is_hidden = false;
-        var tags = std.ArrayList([]const u8).init(self.allocator);
+        var tags: std.ArrayList([]const u8) = .{};
         errdefer {
             for (tags.items) |t| self.allocator.free(t);
-            tags.deinit();
+            tags.deinit(self.allocator);
         }
 
         // Simple JSON parsing for isHidden
@@ -185,7 +185,7 @@ pub const SteamCollections = struct {
                     }
 
                     const tag = try self.allocator.dupe(u8, json_data[str_start..pos]);
-                    try tags.append(tag);
+                    try tags.append(self.allocator, tag);
                     pos += 1;
                 } else if (json_data[pos] == ']') {
                     break;
@@ -197,7 +197,7 @@ pub const SteamCollections = struct {
 
         return GameData{
             .is_hidden = is_hidden,
-            .tags = try tags.toOwnedSlice(),
+            .tags = try tags.toOwnedSlice(self.allocator),
         };
     }
 
@@ -231,7 +231,7 @@ pub const PureLevelDbReader = struct {
         var reader = Self{
             .allocator = allocator,
             .path = try allocator.dupe(u8, path),
-            .sst_files = std.ArrayList([]const u8).init(allocator),
+            .sst_files = .{},
         };
 
         // List all .ldb files in the directory
@@ -250,7 +250,7 @@ pub const PureLevelDbReader = struct {
                     "{s}/{s}",
                     .{ path, entry.name },
                 );
-                try reader.sst_files.append(full_path);
+                try reader.sst_files.append(allocator, full_path);
             }
         }
 
@@ -262,7 +262,7 @@ pub const PureLevelDbReader = struct {
         for (self.sst_files.items) |path| {
             self.allocator.free(path);
         }
-        self.sst_files.deinit();
+        self.sst_files.deinit(self.allocator);
     }
 
     /// Get a value by key

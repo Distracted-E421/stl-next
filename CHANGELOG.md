@@ -2,11 +2,104 @@
 
 All notable changes to STL-Next are documented in this file.
 
+## [0.5.2-alpha] - Zig 0.15.2 Migration
+
+### Changed
+
+#### Zig 0.15.x Migration
+
+- **Upgraded from Zig 0.14.0 to 0.15.2** - Major API migration
+- **ArrayList API changes** - Unmanaged ArrayList now uses `.{}` initialization
+  - `ArrayList(T).init(allocator)` → `ArrayList(T) = .{}`
+  - `list.append(item)` → `list.append(allocator, item)`
+  - `list.appendSlice(items)` → `list.appendSlice(allocator, items)`
+  - `list.deinit()` → `list.deinit(allocator)`
+  - `list.toOwnedSlice()` → `list.toOwnedSlice(allocator)`
+- **HTTP Client API changes** - New request/response pattern
+  - `client.open()` → `client.request(method, uri, options)`
+  - `request.send()/wait()` → `request.sendBodiless()` + `request.receiveHead()`
+  - `response.reader()` now takes a buffer and returns a different Reader type
+  - Body reading via `reader.allocRemaining(allocator, limit)`
+- **File writing changes** - Direct file operations
+  - `file.writer()` no longer available for formatted output
+  - Use `file.writeAll()` with `std.fmt.allocPrint()` for JSON serialization
+- **std.Io.Limit** is now an enum, use `std.Io.Limit.limited(n)` instead of struct
+
+### Files Updated for 0.15.x
+
+- `build.zig` - Added required `.name` field to `addExecutable()`
+- `src/engine/nonsteam.zig` - File writing and ArrayList updates
+- `src/engine/steamgriddb.zig` - HTTP client and ArrayList updates
+- All files using `std.ArrayList` - Updated init/append/deinit patterns
+
+### Fixed
+
+- Build compatibility with Zig 0.15.2
+- All existing tests pass with new Zig version
+- HTTP requests properly handle new API
+
+---
+
+## [0.5.1-alpha] - Phase 5: Nix Packaging
+
+### Added
+
+#### Nix Flake Packaging
+
+- **Full Nix flake** with proper build system
+- **NixOS module** (`nixosModules.default`) for system-wide installation
+- **Home Manager module** (`homeManagerModules.default`) for user-level installation
+- **NXM protocol handler registration** via desktop entries
+- **Configurable defaults** for countdown, tinkers
+
+#### Zig Upgrade
+
+- **Upgraded from Zig 0.13.0 to 0.14.0** for better compatibility
+- All tests pass with new Zig version
+- No breaking API changes required (code compatible)
+
+#### NixOS Module Features
+
+```nix
+programs.stl-next = {
+  enable = true;
+  registerNxmHandler = true;  # Auto-register NXM protocol handler
+};
+```
+
+#### Home Manager Module Features
+
+```nix
+programs.stl-next = {
+  enable = true;
+  countdownSeconds = 10;
+  defaultTinkers = {
+    mangohud = false;
+    gamescope = false;
+    gamemode = true;
+  };
+};
+```
+
+### Changed
+
+- **flake.nix** completely rewritten for proper NixOS/HM integration
+- **NIXOS_INSTALLATION.md** updated with actual flake usage
+- **README.md** updated with installation instructions
+
+### Pending (Phase 5.5)
+
+- **Raylib GUI** - Requires Zig 0.15.1 (awaiting zig-overlay support)
+- GUI source prepared at `src/gui/` but not yet buildable
+
+---
+
 ## [0.5.0-alpha] - Extended Features
 
 ### Added
 
 #### Winetricks Integration (`src/tinkers/winetricks.zig`)
+
 - Automatic winetricks integration during prefix preparation
 - Per-game verb configuration
 - Preset verb collections (basic, dx_essentials, dotnet_legacy, audio_fix, full)
@@ -15,6 +108,7 @@ All notable changes to STL-Next are documented in this file.
 - Integration with Proton's Wine binary
 
 #### Custom Commands (`src/tinkers/customcmd.zig`)
+
 - Pre-launch commands (run before game starts)
 - Post-exit commands (run after game exits)
 - On-error commands (run if launch fails)
@@ -25,6 +119,7 @@ All notable changes to STL-Next are documented in this file.
 - Built-in command templates (kill discord, CPU governor, syncthing, notifications)
 
 #### Non-Steam Games (`src/engine/nonsteam.zig`)
+
 - Full support for non-Steam games
 - Platform types: native, windows, flatpak, appimage, snap, web
 - Game sources: manual, gog, epic, amazon, ea, ubisoft, itch, humble, gamejolt
@@ -33,6 +128,7 @@ All notable changes to STL-Next are documented in this file.
 - All STL-Next features work with non-Steam games
 
 #### SteamGridDB Integration (`src/engine/steamgriddb.zig`)
+
 - Game artwork fetching from SteamGridDB
 - Image types: grid (600x900), hero (1920x620), logo, icon
 - Style preferences (alternate, blurred, material, etc.)
@@ -41,6 +137,7 @@ All notable changes to STL-Next are documented in this file.
 - Works with both Steam AppIDs and SteamGridDB game IDs
 
 #### Documentation
+
 - `docs/WINETRICKS_GUIDE.md` - Complete winetricks integration guide
 - `docs/CUSTOM_COMMANDS.md` - Custom commands configuration guide
 - `docs/NONSTEAM_GAMES.md` - Non-Steam games management guide
@@ -60,6 +157,7 @@ All notable changes to STL-Next are documented in this file.
 ### Added
 
 #### Bug Verification
+
 - **BUG_VERIFICATION_MATRIX.md** - Comprehensive tracking of all 24 original STL bugs
   - 5 confirmed fixed in STL-Next
   - 2 mitigated by architecture
@@ -67,6 +165,7 @@ All notable changes to STL-Next are documented in this file.
   - 6 not applicable (different architecture)
 
 #### Platform Documentation
+
 - **NIXOS_INSTALLATION.md** - Dedicated guide for NixOS users
   - Flake-based installation
   - Home Manager integration
@@ -74,6 +173,7 @@ All notable changes to STL-Next are documented in this file.
   - GPU driver configuration
 
 #### Testing Infrastructure
+
 - **GAME_TESTING_GUIDE.md** - Test procedures for target games:
   - Stardew Valley (413150) - SMAPI, NXM mods
   - Skyrim SE (489830) - MO2/Vortex, SKSE
@@ -81,6 +181,7 @@ All notable changes to STL-Next are documented in this file.
   - Cyberpunk 2077 (1091500) - ReShade, performance
 
 #### Stardrop Integration Research
+
 - **STARDROP_INTEGRATION.md** - First-class Stardrop support plan
   - Detection strategy for Linux native mod manager
   - NXM link forwarding architecture
@@ -111,6 +212,7 @@ All notable changes to STL-Next are documented in this file.
 ### Added
 
 #### IPC System
+
 - **Unix Domain Socket server** for daemon/client communication
 - **JSON protocol** with typed actions and responses
 - **Non-blocking polling** for responsive countdown
@@ -118,6 +220,7 @@ All notable changes to STL-Next are documented in this file.
 - **Comprehensive error types**: `DaemonNotRunning`, `ConnectionTimeout`, `InvalidResponse`
 
 #### Wait Requester Daemon
+
 - **Configurable countdown** (default 10s, `STL_COUNTDOWN` env var)
 - **Skip option** via `STL_SKIP_WAIT`
 - **Pause/resume** during countdown
@@ -125,6 +228,7 @@ All notable changes to STL-Next are documented in this file.
 - **Config save** on launch with updated tinker states
 
 #### TUI Client
+
 - **Terminal-based UI** connecting to daemon
 - **Real-time countdown display**
 - **Keyboard controls**: P (pause), R (resume), L (launch), Q (quit)
@@ -132,6 +236,7 @@ All notable changes to STL-Next are documented in this file.
 - **Status display** with game info
 
 #### NXM Protocol Handler
+
 - **Full URL parsing** for mods and collections
 - **🐛 BUG FIX**: URL encoding for Wine compatibility
 - **Revision preservation** - the critical collection bug fix
@@ -139,8 +244,9 @@ All notable changes to STL-Next are documented in this file.
 - **Validation** with specific error types
 
 #### Mod Manager Detection
+
 - **MO2 path detection** in common Wine locations
-- **Vortex detection** 
+- **Vortex detection**
 - **USVFS DLL override** configuration
 - **Context integration** for launch pipeline
 
@@ -285,4 +391,3 @@ All notable changes to STL-Next are documented in this file.
 - [GitHub Issues](https://github.com/e421/stl-next/issues)
 - [Original STL Issues](https://github.com/sonic2kk/steamtinkerlaunch/issues)
 - [Architecture Guide](docs/ARCHITECTURE.md)
-

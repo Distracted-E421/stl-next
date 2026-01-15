@@ -1,8 +1,9 @@
 const std = @import("std");
 const ipc = @import("../ipc/mod.zig");
+const compat = @import("../compat.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TUI - Terminal User Interface (Phase 4 - Refined)
+// TUI - Terminal User Interface (Phase 4 - Zig 0.15.x)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 pub const TUI = struct {
@@ -31,25 +32,25 @@ pub const TUI = struct {
     }
 
     pub fn run(self: *Self) !void {
-        const stdout = std.io.getStdOut().writer();
-        const stdin = std.io.getStdIn();
+        const stdout = compat.stdout();
+        const stdin = compat.stdin();
 
         // Check if daemon is running
         if (!self.client.isRunning()) {
-            try stdout.print("⚠️  No daemon running for AppID {d}\n", .{self.app_id});
-            try stdout.print("   Start one with: stl-next wait {d}\n", .{self.app_id});
+            compat.print("⚠️  No daemon running for AppID {d}\n", .{self.app_id});
+            compat.print("   Start one with: stl-next wait {d}\n", .{self.app_id});
             return;
         }
 
         // Clear screen and draw header
-        try stdout.print("\x1B[2J\x1B[H", .{});
-        try self.drawHeader(stdout);
+        try stdout.writeAll("\x1B[2J\x1B[H");
+        try self.drawHeader();
 
         while (self.running) {
             // Get status from daemon
             const status = self.client.getStatus() catch |err| {
-                try stdout.print("\r\x1B[K⚠️  Connection lost: {}\n", .{err});
-                std.time.sleep(500 * std.time.ns_per_ms);
+                compat.print("\r\x1B[K⚠️  Connection lost: {}\n", .{err});
+                std.Thread.sleep(500 * std.time.ns_per_ms);
                 if (!self.client.isRunning()) {
                     self.running = false;
                 }
@@ -58,7 +59,7 @@ pub const TUI = struct {
             self.last_status = status;
 
             // Draw current state
-            try self.drawStatus(stdout, status);
+            try self.drawStatus(status);
 
             // Check for input (non-blocking)
             var poll_fds = [_]std.posix.pollfd{.{
@@ -72,7 +73,7 @@ pub const TUI = struct {
                 var buf: [16]u8 = undefined;
                 const n = stdin.read(&buf) catch 0;
                 if (n > 0) {
-                    try self.handleInput(buf[0], stdout);
+                    try self.handleInput(buf[0]);
                 }
             }
 
@@ -82,10 +83,10 @@ pub const TUI = struct {
             }
         }
 
-        try stdout.print("\n\x1B[0m", .{}); // Reset colors
+        try compat.stdout().writeAll("\n\x1B[0m"); // Reset colors
     }
 
-    fn drawHeader(self: *Self, writer: anytype) !void {
+    fn drawHeader(self: *Self) !void {
         // Truncate game name if needed
         const max_name_len = 54;
         const display_name = if (self.game_name.len > max_name_len) 
@@ -93,7 +94,7 @@ pub const TUI = struct {
         else 
             self.game_name;
         
-        try writer.print(
+        compat.print(
             \\
             \\\x1B[36m╔══════════════════════════════════════════════════════════════════╗
             \\║\x1B[1m                    STL-NEXT WAIT REQUESTER                       \x1B[0m\x1B[36m ║
@@ -112,103 +113,103 @@ pub const TUI = struct {
         });
     }
 
-    fn drawStatus(self: *Self, writer: anytype, status: ipc.DaemonMessage) !void {
+    fn drawStatus(self: *Self, status: ipc.DaemonMessage) !void {
+        _ = self;
+        
         // Move to status line
-        try writer.print("\x1B[14;1H\x1B[K", .{});
+        compat.print("\x1B[14;1H\x1B[K", .{});
         
         // State indicator
         switch (status.state) {
-            .INITIALIZING => try writer.print("  ⏳ \x1B[33mInitializing...\x1B[0m", .{}),
-            .WAITING => try writer.print("  ⏸️  \x1B[33mPaused\x1B[0m - Press [R] to resume", .{}),
+            .INITIALIZING => compat.print("  ⏳ \x1B[33mInitializing...\x1B[0m", .{}),
+            .WAITING => compat.print("  ⏸️  \x1B[33mPaused\x1B[0m - Press [R] to resume", .{}),
             .COUNTDOWN => {
                 const filled = 10 - @min(status.countdown_seconds, 10);
-                try writer.print("  ⏱️  Launching in \x1B[1;36m{d}s\x1B[0m [", .{status.countdown_seconds});
+                compat.print("  ⏱️  Launching in \x1B[1;36m{d}s\x1B[0m [", .{status.countdown_seconds});
                 var i: u8 = 0;
                 while (i < 10) : (i += 1) {
                     if (i < filled) {
-                        try writer.print("\x1B[32m█\x1B[0m", .{});
+                        compat.print("\x1B[32m█\x1B[0m", .{});
                     } else {
-                        try writer.print("\x1B[90m░\x1B[0m", .{});
+                        compat.print("\x1B[90m░\x1B[0m", .{});
                     }
                 }
-                try writer.print("]", .{});
+                compat.print("]", .{});
             },
-            .LAUNCHING => try writer.print("  🚀 \x1B[1;32mLaunching game!\x1B[0m", .{}),
-            .RUNNING => try writer.print("  🎮 \x1B[1;32mGame running\x1B[0m", .{}),
-            .FINISHED => try writer.print("  ✅ \x1B[32mComplete\x1B[0m", .{}),
-            .ERROR => try writer.print("  ❌ \x1B[31mError\x1B[0m", .{}),
+            .LAUNCHING => compat.print("  🚀 \x1B[1;32mLaunching game!\x1B[0m", .{}),
+            .RUNNING => compat.print("  🎮 \x1B[1;32mGame running\x1B[0m", .{}),
+            .FINISHED => compat.print("  ✅ \x1B[32mComplete\x1B[0m", .{}),
+            .ERROR => compat.print("  ❌ \x1B[31mError\x1B[0m", .{}),
         }
         
         // Draw tinker status on next line
-        try writer.print("\x1B[15;1H\x1B[K", .{});
-        try writer.print("  Tinkers: ", .{});
+        compat.print("\x1B[15;1H\x1B[K", .{});
+        compat.print("  Tinkers: ", .{});
         
         if (status.mangohud_enabled) {
-            try writer.print("\x1B[32m[MangoHud]\x1B[0m ", .{});
+            compat.print("\x1B[32m[MangoHud]\x1B[0m ", .{});
         } else {
-            try writer.print("\x1B[90m[MangoHud]\x1B[0m ", .{});
+            compat.print("\x1B[90m[MangoHud]\x1B[0m ", .{});
         }
         
         if (status.gamescope_enabled) {
-            try writer.print("\x1B[32m[Gamescope]\x1B[0m ", .{});
+            compat.print("\x1B[32m[Gamescope]\x1B[0m ", .{});
         } else {
-            try writer.print("\x1B[90m[Gamescope]\x1B[0m ", .{});
+            compat.print("\x1B[90m[Gamescope]\x1B[0m ", .{});
         }
         
         if (status.gamemode_enabled) {
-            try writer.print("\x1B[32m[GameMode]\x1B[0m", .{});
+            compat.print("\x1B[32m[GameMode]\x1B[0m", .{});
         } else {
-            try writer.print("\x1B[90m[GameMode]\x1B[0m", .{});
+            compat.print("\x1B[90m[GameMode]\x1B[0m", .{});
         }
-        
-        _ = self;
     }
 
-    fn handleInput(self: *Self, key: u8, writer: anytype) !void {
+    fn handleInput(self: *Self, key: u8) !void {
         // Move to message line
-        try writer.print("\x1B[17;1H\x1B[K", .{});
+        compat.print("\x1B[17;1H\x1B[K", .{});
         
         switch (key) {
             'p', 'P' => {
                 _ = try self.client.pauseLaunch();
-                try writer.print("  📋 \x1B[33mPaused\x1B[0m", .{});
+                compat.print("  📋 \x1B[33mPaused\x1B[0m", .{});
             },
             'r', 'R' => {
                 _ = try self.client.resumeLaunch();
-                try writer.print("  ▶️  \x1B[32mResumed\x1B[0m", .{});
+                compat.print("  ▶️  \x1B[32mResumed\x1B[0m", .{});
             },
             'l', 'L' => {
                 _ = try self.client.proceed();
-                try writer.print("  🚀 \x1B[1;32mLaunching!\x1B[0m", .{});
+                compat.print("  🚀 \x1B[1;32mLaunching!\x1B[0m", .{});
                 self.running = false;
             },
             'q', 'Q' => {
                 _ = try self.client.abort();
-                try writer.print("  ❌ \x1B[31mAborted\x1B[0m", .{});
+                compat.print("  ❌ \x1B[31mAborted\x1B[0m", .{});
                 self.running = false;
             },
             'm', 'M' => {
                 const status = try self.client.toggleTinker("mangohud");
                 if (status.mangohud_enabled) {
-                    try writer.print("  🔧 MangoHud \x1B[32mENABLED\x1B[0m", .{});
+                    compat.print("  🔧 MangoHud \x1B[32mENABLED\x1B[0m", .{});
                 } else {
-                    try writer.print("  🔧 MangoHud \x1B[31mDISABLED\x1B[0m", .{});
+                    compat.print("  🔧 MangoHud \x1B[31mDISABLED\x1B[0m", .{});
                 }
             },
             'g', 'G' => {
                 const status = try self.client.toggleTinker("gamescope");
                 if (status.gamescope_enabled) {
-                    try writer.print("  🔧 Gamescope \x1B[32mENABLED\x1B[0m", .{});
+                    compat.print("  🔧 Gamescope \x1B[32mENABLED\x1B[0m", .{});
                 } else {
-                    try writer.print("  🔧 Gamescope \x1B[31mDISABLED\x1B[0m", .{});
+                    compat.print("  🔧 Gamescope \x1B[31mDISABLED\x1B[0m", .{});
                 }
             },
             'f', 'F' => {
                 const status = try self.client.toggleTinker("gamemode");
                 if (status.gamemode_enabled) {
-                    try writer.print("  🔧 GameMode \x1B[32mENABLED\x1B[0m", .{});
+                    compat.print("  🔧 GameMode \x1B[32mENABLED\x1B[0m", .{});
                 } else {
-                    try writer.print("  🔧 GameMode \x1B[31mDISABLED\x1B[0m", .{});
+                    compat.print("  🔧 GameMode \x1B[31mDISABLED\x1B[0m", .{});
                 }
             },
             else => {},

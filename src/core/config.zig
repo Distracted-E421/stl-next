@@ -267,36 +267,38 @@ pub fn saveGameConfig(allocator: std.mem.Allocator, config: *const GameConfig) !
     const file = try fs.createFileAbsolute(config_path, .{});
     defer file.close();
 
-    var writer = file.writer();
-    try writer.writeAll("{\n");
-    try writer.print("  \"app_id\": {d},\n", .{config.app_id});
-    try writer.print("  \"use_native\": {s},\n", .{if (config.use_native) "true" else "false"});
+    // Zig 0.15.x: Use bufPrint + writeAll pattern
+    var buf: [4096]u8 = undefined;
+    
+    try file.writeAll("{\n");
+    try file.writeAll(try std.fmt.bufPrint(&buf, "  \"app_id\": {d},\n", .{config.app_id}));
+    try file.writeAll(try std.fmt.bufPrint(&buf, "  \"use_native\": {s},\n", .{if (config.use_native) "true" else "false"}));
 
     // MangoHud
-    try writer.writeAll("  \"mangohud\": {\n");
-    try writer.print("    \"enabled\": {s},\n", .{if (config.mangohud.enabled) "true" else "false"});
-    try writer.print("    \"show_fps\": {s},\n", .{if (config.mangohud.show_fps) "true" else "false"});
-    try writer.print("    \"position\": \"{s}\",\n", .{config.mangohud.position});
-    try writer.print("    \"font_size\": {d}\n", .{config.mangohud.font_size});
-    try writer.writeAll("  },\n");
+    try file.writeAll("  \"mangohud\": {\n");
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"enabled\": {s},\n", .{if (config.mangohud.enabled) "true" else "false"}));
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"show_fps\": {s},\n", .{if (config.mangohud.show_fps) "true" else "false"}));
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"position\": \"{s}\",\n", .{config.mangohud.position}));
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"font_size\": {d}\n", .{config.mangohud.font_size}));
+    try file.writeAll("  },\n");
 
     // Gamescope
-    try writer.writeAll("  \"gamescope\": {\n");
-    try writer.print("    \"enabled\": {s},\n", .{if (config.gamescope.enabled) "true" else "false"});
-    try writer.print("    \"width\": {d},\n", .{config.gamescope.width});
-    try writer.print("    \"height\": {d},\n", .{config.gamescope.height});
-    try writer.print("    \"fullscreen\": {s},\n", .{if (config.gamescope.fullscreen) "true" else "false"});
-    try writer.print("    \"fsr\": {s},\n", .{if (config.gamescope.fsr) "true" else "false"});
-    try writer.print("    \"fps_limit\": {d}\n", .{config.gamescope.fps_limit});
-    try writer.writeAll("  },\n");
+    try file.writeAll("  \"gamescope\": {\n");
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"enabled\": {s},\n", .{if (config.gamescope.enabled) "true" else "false"}));
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"width\": {d},\n", .{config.gamescope.width}));
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"height\": {d},\n", .{config.gamescope.height}));
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"fullscreen\": {s},\n", .{if (config.gamescope.fullscreen) "true" else "false"}));
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"fsr\": {s},\n", .{if (config.gamescope.fsr) "true" else "false"}));
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"fps_limit\": {d}\n", .{config.gamescope.fps_limit}));
+    try file.writeAll("  },\n");
 
     // GameMode
-    try writer.writeAll("  \"gamemode\": {\n");
-    try writer.print("    \"enabled\": {s},\n", .{if (config.gamemode.enabled) "true" else "false"});
-    try writer.print("    \"renice\": {d}\n", .{config.gamemode.renice});
-    try writer.writeAll("  }\n");
+    try file.writeAll("  \"gamemode\": {\n");
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"enabled\": {s},\n", .{if (config.gamemode.enabled) "true" else "false"}));
+    try file.writeAll(try std.fmt.bufPrint(&buf, "    \"renice\": {d}\n", .{config.gamemode.renice}));
+    try file.writeAll("  }\n");
 
-    try writer.writeAll("}\n");
+    try file.writeAll("}\n");
 
     std.log.info("Config: Saved to {s}", .{config_path});
 }

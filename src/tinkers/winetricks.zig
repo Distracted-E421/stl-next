@@ -104,27 +104,27 @@ fn installVerb(
     silent: bool,
     force: bool,
 ) !void {
-    var args = std.ArrayList([]const u8).init(ctx.allocator);
-    defer args.deinit();
+    var args: std.ArrayList([]const u8) = .{};
+    defer args.deinit(ctx.allocator);
     
-    try args.append(winetricks_bin);
+    try args.append(ctx.allocator, winetricks_bin);
     
     // Set prefix
-    try args.append("--prefix");
-    try args.append(ctx.prefix_path);
+    try args.append(ctx.allocator, "--prefix");
+    try args.append(ctx.allocator, ctx.prefix_path);
     
     // Silent mode
     if (silent) {
-        try args.append("-q");
+        try args.append(ctx.allocator, "-q");
     }
     
     // Force reinstall
     if (force) {
-        try args.append("--force");
+        try args.append(ctx.allocator, "--force");
     }
     
     // The verb to install
-    try args.append(verb);
+    try args.append(ctx.allocator, verb);
     
     std.log.info("Winetricks: Installing '{s}'...", .{verb});
     
@@ -237,19 +237,19 @@ pub fn listAvailableVerbs(allocator: std.mem.Allocator) ![]const []const u8 {
     
     _ = try child.wait();
     
-    var verbs = std.ArrayList([]const u8).init(allocator);
+    var verbs: std.ArrayList([]const u8) = .{};
     var lines = std.mem.splitScalar(u8, output, '\n');
     while (lines.next()) |line| {
         if (line.len > 0 and line[0] != '#' and line[0] != ' ') {
             // Extract verb name (first word)
             var parts = std.mem.splitScalar(u8, line, ' ');
             if (parts.next()) |verb| {
-                try verbs.append(try allocator.dupe(u8, verb));
+                try verbs.append(allocator, try allocator.dupe(u8, verb));
             }
         }
     }
     
-    return verbs.toOwnedSlice();
+    return verbs.toOwnedSlice(allocator);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

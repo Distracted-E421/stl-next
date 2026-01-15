@@ -243,16 +243,16 @@ pub const AppInfoParser = struct {
     }
     
     fn readNullString(self: *Self, reader: anytype) ![]const u8 {
-        var buf = std.ArrayList(u8).init(self.allocator);
-        errdefer buf.deinit();
+        var buf: std.ArrayList(u8) = .{};
+        errdefer buf.deinit(self.allocator);
         
         while (true) {
             const byte = try reader.readByte();
             if (byte == 0) break;
-            try buf.append(byte);
+            try buf.append(self.allocator, byte);
         }
         
-        return buf.toOwnedSlice();
+        return buf.toOwnedSlice(self.allocator);
     }
     
     /// Extract high-level game information from parsed VDF data
@@ -310,8 +310,8 @@ pub const AppInfoParser = struct {
         
         // Get primary executable (first launch option)
         var executable: ?[]const u8 = null;
-        var launch_options = std.ArrayList(GameInfo.LaunchOption).init(self.allocator);
-        errdefer launch_options.deinit();
+        var launch_options: std.ArrayList(GameInfo.LaunchOption) = .{};
+        errdefer launch_options.deinit(self.allocator);
         
         if (data.get("appinfo")) |appinfo| {
             switch (appinfo) {
@@ -337,7 +337,7 @@ pub const AppInfoParser = struct {
                                                         if (exe) |e| {
                                                             if (executable == null) executable = try self.allocator.dupe(u8, e);
                                                             
-                                                            try launch_options.append(.{
+                                                            try launch_options.append(self.allocator, .{
                                                                 .id = std.fmt.parseInt(u32, entry.key_ptr.*, 10) catch 0,
                                                                 .executable = e,
                                                                 .arguments = if (opt_map.get("arguments")) |a| switch (a) {
@@ -376,7 +376,7 @@ pub const AppInfoParser = struct {
             .name = name,
             .install_dir = install_dir,
             .executable = executable,
-            .launch_options = try launch_options.toOwnedSlice(),
+            .launch_options = try launch_options.toOwnedSlice(self.allocator),
             .is_installed = false, // Determined externally
             .last_played = 0,
             .playtime_minutes = 0,

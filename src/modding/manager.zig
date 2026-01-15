@@ -356,24 +356,24 @@ pub const NxmLink = struct {
     /// This is the FIX for the STL bug!
     pub fn encodeForWine(self: *const Self, allocator: std.mem.Allocator) ![]const u8 {
         // Wine interprets / as command switches, so we encode them
-        var result = std.ArrayList(u8).init(allocator);
-        errdefer result.deinit();
+        var result: std.ArrayList(u8) = .{};
+        errdefer result.deinit(allocator);
         
         // Keep the scheme as-is
-        try result.appendSlice("nxm://");
+        try result.appendSlice(allocator, "nxm://");
         
         // Encode the rest - replace / with %2F
         const rest = self.original_url[6..];
         for (rest) |c| {
             switch (c) {
-                '/' => try result.appendSlice("%2F"),
-                ' ' => try result.appendSlice("%20"),
-                '"' => try result.appendSlice("%22"),
-                else => try result.append(c),
+                '/' => try result.appendSlice(allocator, "%2F"),
+                ' ' => try result.appendSlice(allocator, "%20"),
+                '"' => try result.appendSlice(allocator, "%22"),
+                else => try result.append(allocator, c),
             }
         }
         
-        return result.toOwnedSlice();
+        return result.toOwnedSlice(allocator);
     }
 };
 

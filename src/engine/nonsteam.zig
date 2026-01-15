@@ -162,7 +162,7 @@ pub const NonSteamManager = struct {
         var manager = Self{
             .allocator = allocator,
             .config_dir = config_dir,
-            .games = std.ArrayList(NonSteamGame).init(allocator),
+            .games = .{},
             .next_id = START_ID,
         };
         
@@ -175,7 +175,7 @@ pub const NonSteamManager = struct {
         for (self.games.items) |*game| {
             game.deinit(self.allocator);
         }
-        self.games.deinit();
+        self.games.deinit(self.allocator);
         self.allocator.free(self.config_dir);
     }
 
@@ -185,7 +185,7 @@ pub const NonSteamManager = struct {
         new_game.id = self.next_id;
         self.next_id -= 1;
         
-        try self.games.append(new_game);
+        try self.games.append(self.allocator, new_game);
         try self.save();
         
         std.log.info("NonSteam: Added game '{s}' (ID: {d})", .{ game.name, new_game.id });
@@ -221,13 +221,13 @@ pub const NonSteamManager = struct {
 
     /// List visible games (not hidden)
     pub fn listVisibleGames(self: *Self) ![]NonSteamGame {
-        var visible = std.ArrayList(NonSteamGame).init(self.allocator);
+        var visible: std.ArrayList(NonSteamGame) = .{};
         for (self.games.items) |game| {
             if (!game.hidden) {
-                try visible.append(game);
+                try visible.append(self.allocator, game);
             }
         }
-        return visible.toOwnedSlice();
+        return visible.toOwnedSlice(self.allocator);
     }
 
     /// Import games from GOG Galaxy
@@ -370,7 +370,7 @@ pub const NonSteamManager = struct {
             if (games_arr == .array) {
                 for (games_arr.array.items) |item| {
                     if (self.parseGameEntry(item)) |game| {
-                        try self.games.append(game);
+                        try self.games.append(self.allocator, game);
                     }
                 }
             }
@@ -454,53 +454,89 @@ pub const NonSteamManager = struct {
         const file = try fs.createFileAbsolute(games_file, .{});
         defer file.close();
         
-        var writer = file.writer();
+        // Zig 0.15.x: Use direct file.writeAll() with allocPrint for formatting
+        try file.writeAll("{\n");
         
-        try writer.writeAll("{\n");
-        try writer.print("  \"next_id\": {d},\n", .{self.next_id});
-        try writer.writeAll("  \"games\": [\n");
+        const next_id_line = try std.fmt.allocPrint(self.allocator, "  \"next_id\": {d},\n", .{self.next_id});
+        defer self.allocator.free(next_id_line);
+        try file.writeAll(next_id_line);
+        
+        try file.writeAll("  \"games\": [\n");
         
         for (self.games.items, 0..) |game, i| {
-            try writer.writeAll("    {\n");
-            try writer.print("      \"id\": {d},\n", .{game.id});
-            try writer.print("      \"name\": \"{s}\",\n", .{game.name});
-            try writer.print("      \"platform\": \"{s}\",\n", .{@tagName(game.platform)});
-            try writer.print("      \"source\": \"{s}\",\n", .{@tagName(game.source)});
-            try writer.print("      \"executable\": \"{s}\",\n", .{game.executable});
+            try file.writeAll("    {\n");
+            
+            const id_line = try std.fmt.allocPrint(self.allocator, "      \"id\": {d},\n", .{game.id});
+            defer self.allocator.free(id_line);
+            try file.writeAll(id_line);
+            
+            const name_line = try std.fmt.allocPrint(self.allocator, "      \"name\": \"{s}\",\n", .{game.name});
+            defer self.allocator.free(name_line);
+            try file.writeAll(name_line);
+            
+            const platform_line = try std.fmt.allocPrint(self.allocator, "      \"platform\": \"{s}\",\n", .{@tagName(game.platform)});
+            defer self.allocator.free(platform_line);
+            try file.writeAll(platform_line);
+            
+            const source_line = try std.fmt.allocPrint(self.allocator, "      \"source\": \"{s}\",\n", .{@tagName(game.source)});
+            defer self.allocator.free(source_line);
+            try file.writeAll(source_line);
+            
+            const exec_line = try std.fmt.allocPrint(self.allocator, "      \"executable\": \"{s}\",\n", .{game.executable});
+            defer self.allocator.free(exec_line);
+            try file.writeAll(exec_line);
             
             if (game.working_dir) |w| {
-                try writer.print("      \"working_dir\": \"{s}\",\n", .{w});
+                const wd_line = try std.fmt.allocPrint(self.allocator, "      \"working_dir\": \"{s}\",\n", .{w});
+                defer self.allocator.free(wd_line);
+                try file.writeAll(wd_line);
             }
             if (game.arguments.len > 0) {
-                try writer.print("      \"arguments\": \"{s}\",\n", .{game.arguments});
+                const args_line = try std.fmt.allocPrint(self.allocator, "      \"arguments\": \"{s}\",\n", .{game.arguments});
+                defer self.allocator.free(args_line);
+                try file.writeAll(args_line);
             }
             if (game.prefix_path) |p| {
-                try writer.print("      \"prefix_path\": \"{s}\",\n", .{p});
+                const prefix_line = try std.fmt.allocPrint(self.allocator, "      \"prefix_path\": \"{s}\",\n", .{p});
+                defer self.allocator.free(prefix_line);
+                try file.writeAll(prefix_line);
             }
             if (game.proton_version) |v| {
-                try writer.print("      \"proton_version\": \"{s}\",\n", .{v});
+                const proton_line = try std.fmt.allocPrint(self.allocator, "      \"proton_version\": \"{s}\",\n", .{v});
+                defer self.allocator.free(proton_line);
+                try file.writeAll(proton_line);
             }
             if (game.steamgriddb_id) |id| {
-                try writer.print("      \"steamgriddb_id\": {d},\n", .{id});
-            }
-            try writer.print("      \"playtime_minutes\": {d},\n", .{game.playtime_minutes});
-            try writer.print("      \"hidden\": {s},\n", .{if (game.hidden) "true" else "false"});
-            if (game.notes.len > 0) {
-                try writer.print("      \"notes\": \"{s}\"\n", .{game.notes});
-            } else {
-                // Need to remove trailing comma from hidden
-                try writer.writeAll("      \"notes\": \"\"\n");
+                const sgdb_line = try std.fmt.allocPrint(self.allocator, "      \"steamgriddb_id\": {d},\n", .{id});
+                defer self.allocator.free(sgdb_line);
+                try file.writeAll(sgdb_line);
             }
             
-            try writer.writeAll("    }");
-            if (i < self.games.items.len - 1) {
-                try writer.writeAll(",");
+            const playtime_line = try std.fmt.allocPrint(self.allocator, "      \"playtime_minutes\": {d},\n", .{game.playtime_minutes});
+            defer self.allocator.free(playtime_line);
+            try file.writeAll(playtime_line);
+            
+            const hidden_line = try std.fmt.allocPrint(self.allocator, "      \"hidden\": {s},\n", .{if (game.hidden) "true" else "false"});
+            defer self.allocator.free(hidden_line);
+            try file.writeAll(hidden_line);
+            
+            if (game.notes.len > 0) {
+                const notes_line = try std.fmt.allocPrint(self.allocator, "      \"notes\": \"{s}\"\n", .{game.notes});
+                defer self.allocator.free(notes_line);
+                try file.writeAll(notes_line);
+            } else {
+                try file.writeAll("      \"notes\": \"\"\n");
             }
-            try writer.writeAll("\n");
+            
+            try file.writeAll("    }");
+            if (i < self.games.items.len - 1) {
+                try file.writeAll(",");
+            }
+            try file.writeAll("\n");
         }
         
-        try writer.writeAll("  ]\n");
-        try writer.writeAll("}\n");
+        try file.writeAll("  ]\n");
+        try file.writeAll("}\n");
         
         std.log.debug("NonSteam: Saved {d} game(s)", .{self.games.items.len});
     }

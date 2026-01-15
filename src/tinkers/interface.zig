@@ -81,16 +81,16 @@ pub const TinkerRegistry = struct {
     pub fn init(allocator: std.mem.Allocator) Self {
         return .{
             .allocator = allocator,
-            .tinkers = std.ArrayList(*const Tinker).init(allocator),
+            .tinkers = .{},
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.tinkers.deinit();
+        self.tinkers.deinit(self.allocator);
     }
 
     pub fn register(self: *Self, tinker: *const Tinker) !void {
-        try self.tinkers.append(tinker);
+        try self.tinkers.append(self.allocator, tinker);
         std.sort.insertion(*const Tinker, self.tinkers.items, {}, struct {
             fn lessThan(_: void, a: *const Tinker, b: *const Tinker) bool {
                 return a.priority < b.priority;
@@ -99,16 +99,16 @@ pub const TinkerRegistry = struct {
     }
 
     pub fn getEnabled(self: *Self, ctx: *const Context) ![]*const Tinker {
-        var enabled = std.ArrayList(*const Tinker).init(self.allocator);
-        errdefer enabled.deinit();
+        var enabled: std.ArrayList(*const Tinker) = .{};
+        errdefer enabled.deinit(self.allocator);
 
         for (self.tinkers.items) |tinker| {
             if (tinker.isEnabled(ctx)) {
-                try enabled.append(tinker);
+                try enabled.append(self.allocator, tinker);
             }
         }
 
-        return enabled.toOwnedSlice();
+        return enabled.toOwnedSlice(self.allocator);
     }
 
     pub fn runAll(self: *Self, ctx: *const Context, env: *EnvMap, args: *ArgList) !void {

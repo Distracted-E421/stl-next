@@ -80,7 +80,7 @@ pub const Client = struct {
                 
                 // Wait before retry
                 if (attempt < self.max_retries - 1) {
-                    std.time.sleep(100 * std.time.ns_per_ms);
+                    std.Thread.sleep(100 * std.time.ns_per_ms);
                 }
             }
         }
@@ -191,12 +191,12 @@ pub const Client = struct {
     /// Toggle a tinker on/off
     pub fn toggleTinker(self: *Self, tinker_id: []const u8) !protocol.DaemonMessage {
         // Build message with tinker_id
-        var buf = std.ArrayList(u8).init(self.allocator);
-        defer buf.deinit();
+        var buf: std.ArrayList(u8) = .{};
+        defer buf.deinit(self.allocator);
         
-        try buf.appendSlice("{\"action\":\"TOGGLE_TINKER\",\"tinker_id\":\"");
-        try buf.appendSlice(tinker_id);
-        try buf.appendSlice("\"}");
+        try buf.appendSlice(self.allocator, "{\"action\":\"TOGGLE_TINKER\",\"tinker_id\":\"");
+        try buf.appendSlice(self.allocator, tinker_id);
+        try buf.appendSlice(self.allocator, "\"}");
         
         // Connect and send
         const socket = try std.posix.socket(

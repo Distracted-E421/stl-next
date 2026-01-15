@@ -19,7 +19,7 @@ pub const Action = enum {
     GET_GAME_INFO,
     GET_TINKERS,
     TOGGLE_TINKER,
-    
+
     pub fn toString(self: Action) []const u8 {
         return switch (self) {
             .PAUSE_LAUNCH => "PAUSE_LAUNCH",
@@ -33,7 +33,7 @@ pub const Action = enum {
             .TOGGLE_TINKER => "TOGGLE_TINKER",
         };
     }
-    
+
     pub fn fromString(s: []const u8) ?Action {
         const actions = [_]struct { name: []const u8, action: Action }{
             .{ .name = "PAUSE_LAUNCH", .action = .PAUSE_LAUNCH },
@@ -64,7 +64,7 @@ pub const DaemonState = enum {
     RUNNING,
     FINISHED,
     ERROR,
-    
+
     pub fn toString(self: DaemonState) []const u8 {
         return switch (self) {
             .INITIALIZING => "INITIALIZING",
@@ -76,7 +76,7 @@ pub const DaemonState = enum {
             .ERROR => "ERROR",
         };
     }
-    
+
     pub fn fromString(s: []const u8) DaemonState {
         if (std.mem.indexOf(u8, s, "WAITING") != null) return .WAITING;
         if (std.mem.indexOf(u8, s, "COUNTDOWN") != null) return .COUNTDOWN;
@@ -93,28 +93,28 @@ pub const ClientMessage = struct {
     action: Action,
     tinker_id: ?[]const u8 = null,
     enabled: ?bool = null,
-    
+
     pub fn serialize(self: *const ClientMessage, allocator: std.mem.Allocator) ![]u8 {
-        var buf = std.ArrayList(u8).init(allocator);
-        errdefer buf.deinit();
-        
-        try buf.appendSlice("{\"action\":\"");
-        try buf.appendSlice(self.action.toString());
-        try buf.appendSlice("\"");
-        
+        var buf: std.ArrayList(u8) = .{};
+        errdefer buf.deinit(allocator);
+
+        try buf.appendSlice(allocator, "{\"action\":\"");
+        try buf.appendSlice(allocator, self.action.toString());
+        try buf.appendSlice(allocator, "\"");
+
         if (self.tinker_id) |tid| {
-            try buf.appendSlice(",\"tinker_id\":\"");
-            try buf.appendSlice(tid);
-            try buf.appendSlice("\"");
+            try buf.appendSlice(allocator, ",\"tinker_id\":\"");
+            try buf.appendSlice(allocator, tid);
+            try buf.appendSlice(allocator, "\"");
         }
-        
+
         if (self.enabled) |e| {
-            try buf.appendSlice(",\"enabled\":");
-            try buf.appendSlice(if (e) "true" else "false");
+            try buf.appendSlice(allocator, ",\"enabled\":");
+            try buf.appendSlice(allocator, if (e) "true" else "false");
         }
-        
-        try buf.appendSlice("}");
-        return buf.toOwnedSlice();
+
+        try buf.appendSlice(allocator, "}");
+        return buf.toOwnedSlice(allocator);
     }
 };
 
@@ -125,79 +125,79 @@ pub const DaemonMessage = struct {
     game_name: []const u8 = "",
     app_id: u32 = 0,
     error_msg: ?[]const u8 = null,
-    
+
     // Tinker states
     mangohud_enabled: bool = false,
     gamescope_enabled: bool = false,
     gamemode_enabled: bool = false,
-    
+
     pub fn serialize(self: *const DaemonMessage, allocator: std.mem.Allocator) ![]u8 {
-        var buf = std.ArrayList(u8).init(allocator);
-        errdefer buf.deinit();
-        
-        try buf.appendSlice("{");
-        
+        var buf: std.ArrayList(u8) = .{};
+        errdefer buf.deinit(allocator);
+
+        try buf.appendSlice(allocator, "{");
+
         // State
-        try buf.appendSlice("\"state\":\"");
-        try buf.appendSlice(self.state.toString());
-        try buf.appendSlice("\",");
-        
+        try buf.appendSlice(allocator, "\"state\":\"");
+        try buf.appendSlice(allocator, self.state.toString());
+        try buf.appendSlice(allocator, "\",");
+
         // Countdown
-        try buf.appendSlice("\"countdown_seconds\":");
+        try buf.appendSlice(allocator, "\"countdown_seconds\":");
         var num_buf: [8]u8 = undefined;
         const num_str = std.fmt.bufPrint(&num_buf, "{d}", .{self.countdown_seconds}) catch "0";
-        try buf.appendSlice(num_str);
-        try buf.appendSlice(",");
-        
+        try buf.appendSlice(allocator, num_str);
+        try buf.appendSlice(allocator, ",");
+
         // Game name (escape quotes)
-        try buf.appendSlice("\"game_name\":\"");
+        try buf.appendSlice(allocator, "\"game_name\":\"");
         for (self.game_name) |c| {
             if (c == '"') {
-                try buf.appendSlice("\\\"");
+                try buf.appendSlice(allocator, "\\\"");
             } else if (c == '\\') {
-                try buf.appendSlice("\\\\");
+                try buf.appendSlice(allocator, "\\\\");
             } else {
-                try buf.append(c);
+                try buf.append(allocator, c);
             }
         }
-        try buf.appendSlice("\",");
-        
+        try buf.appendSlice(allocator, "\",");
+
         // App ID
-        try buf.appendSlice("\"app_id\":");
+        try buf.appendSlice(allocator, "\"app_id\":");
         const app_str = std.fmt.bufPrint(&num_buf, "{d}", .{self.app_id}) catch "0";
-        try buf.appendSlice(app_str);
-        try buf.appendSlice(",");
-        
+        try buf.appendSlice(allocator, app_str);
+        try buf.appendSlice(allocator, ",");
+
         // Tinker states
-        try buf.appendSlice("\"mangohud_enabled\":");
-        try buf.appendSlice(if (self.mangohud_enabled) "true" else "false");
-        try buf.appendSlice(",");
-        
-        try buf.appendSlice("\"gamescope_enabled\":");
-        try buf.appendSlice(if (self.gamescope_enabled) "true" else "false");
-        try buf.appendSlice(",");
-        
-        try buf.appendSlice("\"gamemode_enabled\":");
-        try buf.appendSlice(if (self.gamemode_enabled) "true" else "false");
-        
+        try buf.appendSlice(allocator, "\"mangohud_enabled\":");
+        try buf.appendSlice(allocator, if (self.mangohud_enabled) "true" else "false");
+        try buf.appendSlice(allocator, ",");
+
+        try buf.appendSlice(allocator, "\"gamescope_enabled\":");
+        try buf.appendSlice(allocator, if (self.gamescope_enabled) "true" else "false");
+        try buf.appendSlice(allocator, ",");
+
+        try buf.appendSlice(allocator, "\"gamemode_enabled\":");
+        try buf.appendSlice(allocator, if (self.gamemode_enabled) "true" else "false");
+
         // Error (optional)
         if (self.error_msg) |err| {
-            try buf.appendSlice(",\"error_msg\":\"");
-            try buf.appendSlice(err);
-            try buf.appendSlice("\"");
+            try buf.appendSlice(allocator, ",\"error_msg\":\"");
+            try buf.appendSlice(allocator, err);
+            try buf.appendSlice(allocator, "\"");
         }
-        
-        try buf.appendSlice("}");
-        return buf.toOwnedSlice();
+
+        try buf.appendSlice(allocator, "}");
+        return buf.toOwnedSlice(allocator);
     }
-    
+
     pub fn parseFromJson(allocator: std.mem.Allocator, data: []const u8) !DaemonMessage {
         _ = allocator;
         var msg = DaemonMessage{};
-        
+
         // Parse state
         msg.state = DaemonState.fromString(data);
-        
+
         // Parse countdown_seconds
         if (std.mem.indexOf(u8, data, "\"countdown_seconds\":")) |pos| {
             const start = pos + 20;
@@ -209,7 +209,7 @@ pub const DaemonMessage = struct {
                 }
             }
         }
-        
+
         // Parse app_id
         if (std.mem.indexOf(u8, data, "\"app_id\":")) |pos| {
             const start = pos + 9;
@@ -221,12 +221,12 @@ pub const DaemonMessage = struct {
                 }
             }
         }
-        
+
         // Parse booleans
         msg.mangohud_enabled = std.mem.indexOf(u8, data, "\"mangohud_enabled\":true") != null;
         msg.gamescope_enabled = std.mem.indexOf(u8, data, "\"gamescope_enabled\":true") != null;
         msg.gamemode_enabled = std.mem.indexOf(u8, data, "\"gamemode_enabled\":true") != null;
-        
+
         return msg;
     }
 };
@@ -267,7 +267,7 @@ test "daemon message serialization" {
     };
     const serialized = try msg.serialize(std.testing.allocator);
     defer std.testing.allocator.free(serialized);
-    
+
     try std.testing.expect(std.mem.indexOf(u8, serialized, "COUNTDOWN") != null);
     try std.testing.expect(std.mem.indexOf(u8, serialized, "Test Game") != null);
     try std.testing.expect(std.mem.indexOf(u8, serialized, "12345") != null);
@@ -277,7 +277,7 @@ test "daemon message serialization" {
 test "daemon message parsing" {
     const json = "{\"state\":\"COUNTDOWN\",\"countdown_seconds\":7,\"app_id\":413150,\"mangohud_enabled\":true}";
     const msg = try DaemonMessage.parseFromJson(std.testing.allocator, json);
-    
+
     try std.testing.expectEqual(DaemonState.COUNTDOWN, msg.state);
     try std.testing.expectEqual(@as(u8, 7), msg.countdown_seconds);
     try std.testing.expectEqual(@as(u32, 413150), msg.app_id);

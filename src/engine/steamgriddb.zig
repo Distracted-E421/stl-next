@@ -20,10 +20,10 @@ const API_BASE = "https://www.steamgriddb.com/api/v2";
 
 /// Image types available from SteamGridDB
 pub const ImageType = enum {
-    grid,   // 600x900 vertical cover
-    hero,   // 1920x620 horizontal banner
-    logo,   // Transparent logo
-    icon,   // Square icon
+    grid, // 600x900 vertical cover
+    hero, // 1920x620 horizontal banner
+    logo, // Transparent logo
+    icon, // Square icon
 
     pub fn toPath(self: ImageType) []const u8 {
         return switch (self) {
@@ -87,7 +87,7 @@ pub const GameResult = struct {
     name: []const u8,
     types: []const []const u8,
     verified: bool,
-    
+
     pub fn deinit(self: *GameResult, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
         for (self.types) |t| allocator.free(t);
@@ -105,7 +105,7 @@ pub const ImageResult = struct {
     style: []const u8,
     mime: []const u8,
     score: i32,
-    
+
     pub fn deinit(self: *ImageResult, allocator: std.mem.Allocator) void {
         allocator.free(self.url);
         allocator.free(self.thumb_url);
@@ -119,7 +119,7 @@ pub const SteamGridDBClient = struct {
     allocator: std.mem.Allocator,
     api_key: []const u8,
     cache_dir: []const u8,
-    
+
     const Self = @This();
 
     pub fn init(allocator: std.mem.Allocator, api_key: ?[]const u8) !Self {
@@ -128,14 +128,14 @@ pub const SteamGridDBClient = struct {
             std.log.warn("SteamGridDB: No API key provided (set STEAMGRIDDB_API_KEY)", .{});
             return error.NoApiKey;
         };
-        
+
         const cache_dir = try getCacheDir(allocator);
-        
+
         // Ensure cache directories exist
         std.fs.makeDirAbsolute(cache_dir) catch |err| {
             if (err != error.PathAlreadyExists) return err;
         };
-        
+
         for ([_][]const u8{ "grids", "heroes", "logos", "icons" }) |subdir| {
             const sub_path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ cache_dir, subdir });
             defer allocator.free(sub_path);
@@ -143,7 +143,7 @@ pub const SteamGridDBClient = struct {
                 if (err != error.PathAlreadyExists) return err;
             };
         }
-        
+
         return Self{
             .allocator = allocator,
             .api_key = try allocator.dupe(u8, key),
@@ -160,17 +160,17 @@ pub const SteamGridDBClient = struct {
     pub fn searchGame(self: *Self, name: []const u8) ![]GameResult {
         const encoded_name = try urlEncode(self.allocator, name);
         defer self.allocator.free(encoded_name);
-        
+
         const url = try std.fmt.allocPrint(
             self.allocator,
             "{s}/search/autocomplete/{s}",
             .{ API_BASE, encoded_name },
         );
         defer self.allocator.free(url);
-        
+
         const response = try self.apiRequest(url);
         defer self.allocator.free(response);
-        
+
         return self.parseGameResults(response);
     }
 
@@ -182,38 +182,38 @@ pub const SteamGridDBClient = struct {
         style: ImageStyle,
         dimensions: Dimensions,
     ) ![]ImageResult {
-        var url_buf = std.ArrayList(u8).init(self.allocator);
-        defer url_buf.deinit();
-        
-        try url_buf.appendSlice(API_BASE);
-        try url_buf.appendSlice("/");
-        try url_buf.appendSlice(image_type.toPath());
-        try url_buf.appendSlice("/game/");
-        
+        var url_buf: std.ArrayList(u8) = .{};
+        defer url_buf.deinit(self.allocator);
+
+        try url_buf.appendSlice(self.allocator, API_BASE);
+        try url_buf.appendSlice(self.allocator, "/");
+        try url_buf.appendSlice(self.allocator, image_type.toPath());
+        try url_buf.appendSlice(self.allocator, "/game/");
+
         var id_buf: [16]u8 = undefined;
         const id_str = std.fmt.bufPrint(&id_buf, "{d}", .{game_id}) catch return error.FormatFailed;
-        try url_buf.appendSlice(id_str);
-        
+        try url_buf.appendSlice(self.allocator, id_str);
+
         // Add query params
         var has_param = false;
-        
+
         if (style.toQuery()) |s| {
-            try url_buf.appendSlice(if (has_param) "&" else "?");
-            try url_buf.appendSlice("styles=");
-            try url_buf.appendSlice(s);
+            try url_buf.appendSlice(self.allocator, if (has_param) "&" else "?");
+            try url_buf.appendSlice(self.allocator, "styles=");
+            try url_buf.appendSlice(self.allocator, s);
             has_param = true;
         }
-        
+
         if (dimensions.toQuery()) |d| {
-            try url_buf.appendSlice(if (has_param) "&" else "?");
-            try url_buf.appendSlice("dimensions=");
-            try url_buf.appendSlice(d);
+            try url_buf.appendSlice(self.allocator, if (has_param) "&" else "?");
+            try url_buf.appendSlice(self.allocator, "dimensions=");
+            try url_buf.appendSlice(self.allocator, d);
             has_param = true;
         }
-        
+
         const response = try self.apiRequest(url_buf.items);
         defer self.allocator.free(response);
-        
+
         return self.parseImageResults(response);
     }
 
@@ -229,10 +229,10 @@ pub const SteamGridDBClient = struct {
             "{s}/{s}/steam/{d}",
             .{ API_BASE, image_type.toPath(), app_id },
         ) catch return error.FormatFailed;
-        
+
         const response = try self.apiRequest(url);
         defer self.allocator.free(response);
-        
+
         return self.parseImageResults(response);
     }
 
@@ -245,59 +245,57 @@ pub const SteamGridDBClient = struct {
     ) ![]const u8 {
         // Determine file extension from mime type
         const ext = getMimeExtension(image.mime);
-        
+
         // Build cache path
         const cache_path = try std.fmt.allocPrint(
             self.allocator,
             "{s}/{s}/{d}_{d}{s}",
             .{ self.cache_dir, image_type.toPath(), game_id, image.id, ext },
         );
-        
+
         // Check if already cached
         if (std.fs.accessAbsolute(cache_path, .{})) {
             std.log.debug("SteamGridDB: Using cached image: {s}", .{cache_path});
             return cache_path;
         } else |_| {}
-        
+
         // Download the image
         std.log.info("SteamGridDB: Downloading {s}", .{image.url});
-        
+
         var client = http.Client{ .allocator = self.allocator };
         defer client.deinit();
-        
+
+        // Parse URI
         const uri = try std.Uri.parse(image.url);
-        
-        var header_buf: [4096]u8 = undefined;
-        var request = try client.open(.GET, uri, .{
-            .server_header_buffer = &header_buf,
-        });
-        defer request.deinit();
-        
-        try request.send();
-        try request.wait();
-        
-        if (request.response.status != .ok) {
+
+        // Zig 0.15.x: Use request/response API
+        var req = try client.request(.GET, uri, .{});
+        defer req.deinit();
+
+        // Send the request
+        try req.sendBodiless();
+
+        // Receive response head
+        var redirect_buffer: [8192]u8 = undefined;
+        var response = try req.receiveHead(&redirect_buffer);
+
+        if (response.head.status != .ok) {
             return error.DownloadFailed;
         }
-        
-        // Read response body
-        var body = std.ArrayList(u8).init(self.allocator);
-        defer body.deinit();
-        
-        var buf: [8192]u8 = undefined;
-        while (true) {
-            const n = try request.reader().read(&buf);
-            if (n == 0) break;
-            try body.appendSlice(buf[0..n]);
-        }
-        
+
+        // Zig 0.15.x: Read response body using the response reader
+        var transfer_buffer: [8192]u8 = undefined;
+        const reader = response.reader(&transfer_buffer);
+        const body = try reader.allocRemaining(self.allocator, std.Io.Limit.limited(10 * 1024 * 1024));
+        defer self.allocator.free(body);
+
         // Write to cache
         const file = try std.fs.createFileAbsolute(cache_path, .{});
         defer file.close();
-        try file.writeAll(body.items);
-        
+        try file.writeAll(body);
+
         std.log.info("SteamGridDB: Saved to {s}", .{cache_path});
-        
+
         return cache_path;
     }
 
@@ -313,17 +311,17 @@ pub const SteamGridDBClient = struct {
             .{ self.cache_dir, image_type.toPath(), game_id },
         ) catch return null;
         defer self.allocator.free(prefix);
-        
+
         const type_dir = std.fmt.allocPrint(
             self.allocator,
             "{s}/{s}",
             .{ self.cache_dir, image_type.toPath() },
         ) catch return null;
         defer self.allocator.free(type_dir);
-        
+
         var dir = std.fs.openDirAbsolute(type_dir, .{ .iterate = true }) catch return null;
         defer dir.close();
-        
+
         var iter = dir.iterate();
         while (iter.next() catch return null) |entry| {
             if (std.mem.startsWith(u8, entry.name, std.fs.path.basename(prefix))) {
@@ -334,44 +332,47 @@ pub const SteamGridDBClient = struct {
                 ) catch return null;
             }
         }
-        
+
         return null;
     }
 
     fn apiRequest(self: *Self, url: []const u8) ![]const u8 {
         var client = http.Client{ .allocator = self.allocator };
         defer client.deinit();
-        
+
+        // Build authorization header
+        const auth_header = try std.fmt.allocPrint(self.allocator, "Bearer {s}", .{self.api_key});
+        defer self.allocator.free(auth_header);
+
+        // Parse URI
         const uri = try std.Uri.parse(url);
-        
-        var header_buf: [4096]u8 = undefined;
-        var request = try client.open(.GET, uri, .{
-            .server_header_buffer = &header_buf,
+
+        // Zig 0.15.x: Use request/response API
+        var req = try client.request(.GET, uri, .{
             .extra_headers = &.{
-                .{ .name = "Authorization", .value = try std.fmt.allocPrint(self.allocator, "Bearer {s}", .{self.api_key}) },
+                .{ .name = "Authorization", .value = auth_header },
             },
         });
-        defer request.deinit();
-        
-        try request.send();
-        try request.wait();
-        
-        if (request.response.status != .ok) {
-            std.log.warn("SteamGridDB: API returned {}", .{request.response.status});
+        defer req.deinit();
+
+        // Send the request (no body for GET)
+        try req.sendBodiless();
+
+        // Receive response head
+        var redirect_buffer: [8192]u8 = undefined;
+        var response = try req.receiveHead(&redirect_buffer);
+
+        if (response.head.status != .ok) {
+            std.log.warn("SteamGridDB: API returned {}", .{response.head.status});
             return error.ApiError;
         }
-        
-        var body = std.ArrayList(u8).init(self.allocator);
-        errdefer body.deinit();
-        
-        var buf: [8192]u8 = undefined;
-        while (true) {
-            const n = try request.reader().read(&buf);
-            if (n == 0) break;
-            try body.appendSlice(buf[0..n]);
-        }
-        
-        return body.toOwnedSlice();
+
+        // Zig 0.15.x: Read response body using the response reader
+        var transfer_buffer: [8192]u8 = undefined;
+        const reader = response.reader(&transfer_buffer);
+        const body = try reader.allocRemaining(self.allocator, std.Io.Limit.limited(1024 * 1024));
+
+        return body;
     }
 
     fn parseGameResults(self: *Self, response: []const u8) ![]GameResult {
@@ -380,50 +381,50 @@ pub const SteamGridDBClient = struct {
             return error.ParseError;
         };
         defer parsed.deinit();
-        
+
         if (parsed.value != .object) return error.InvalidResponse;
-        
+
         const data = parsed.value.object.get("data") orelse return error.InvalidResponse;
         if (data != .array) return error.InvalidResponse;
-        
-        var results = std.ArrayList(GameResult).init(self.allocator);
-        errdefer results.deinit();
-        
+
+        var results: std.ArrayList(GameResult) = .{};
+        errdefer results.deinit(self.allocator);
+
         for (data.array.items) |item| {
             if (item != .object) continue;
             const obj = item.object;
-            
+
             const id = obj.get("id") orelse continue;
             if (id != .integer) continue;
-            
+
             const name = obj.get("name") orelse continue;
             if (name != .string) continue;
-            
+
             var verified = false;
             if (obj.get("verified")) |v| {
                 if (v == .bool) verified = v.bool;
             }
-            
-            var types = std.ArrayList([]const u8).init(self.allocator);
+
+            var types: std.ArrayList([]const u8) = .{};
             if (obj.get("types")) |t| {
                 if (t == .array) {
                     for (t.array.items) |type_item| {
                         if (type_item == .string) {
-                            try types.append(try self.allocator.dupe(u8, type_item.string));
+                            try types.append(self.allocator, try self.allocator.dupe(u8, type_item.string));
                         }
                     }
                 }
             }
-            
-            try results.append(.{
+
+            try results.append(self.allocator, .{
                 .id = @intCast(id.integer),
                 .name = try self.allocator.dupe(u8, name.string),
-                .types = try types.toOwnedSlice(),
+                .types = try types.toOwnedSlice(self.allocator),
                 .verified = verified,
             });
         }
-        
-        return results.toOwnedSlice();
+
+        return results.toOwnedSlice(self.allocator);
     }
 
     fn parseImageResults(self: *Self, response: []const u8) ![]ImageResult {
@@ -432,44 +433,44 @@ pub const SteamGridDBClient = struct {
             return error.ParseError;
         };
         defer parsed.deinit();
-        
+
         if (parsed.value != .object) return error.InvalidResponse;
-        
+
         const data = parsed.value.object.get("data") orelse return error.InvalidResponse;
         if (data != .array) return error.InvalidResponse;
-        
-        var results = std.ArrayList(ImageResult).init(self.allocator);
-        errdefer results.deinit();
-        
+
+        var results: std.ArrayList(ImageResult) = .{};
+        errdefer results.deinit(self.allocator);
+
         for (data.array.items) |item| {
             if (item != .object) continue;
             const obj = item.object;
-            
+
             const id = obj.get("id") orelse continue;
             const url = obj.get("url") orelse continue;
             const thumb = obj.get("thumb") orelse continue;
             const width = obj.get("width") orelse continue;
             const height = obj.get("height") orelse continue;
-            
+
             if (id != .integer or url != .string or thumb != .string or
                 width != .integer or height != .integer) continue;
-            
+
             var style: []const u8 = "";
             if (obj.get("style")) |s| {
                 if (s == .string) style = try self.allocator.dupe(u8, s.string);
             }
-            
+
             var mime: []const u8 = "image/png";
             if (obj.get("mime")) |m| {
                 if (m == .string) mime = try self.allocator.dupe(u8, m.string);
             }
-            
+
             var score: i32 = 0;
             if (obj.get("score")) |sc| {
                 if (sc == .integer) score = @intCast(sc.integer);
             }
-            
-            try results.append(.{
+
+            try results.append(self.allocator, .{
                 .id = @intCast(id.integer),
                 .url = try self.allocator.dupe(u8, url.string),
                 .thumb_url = try self.allocator.dupe(u8, thumb.string),
@@ -480,8 +481,8 @@ pub const SteamGridDBClient = struct {
                 .score = score,
             });
         }
-        
-        return results.toOwnedSlice();
+
+        return results.toOwnedSlice(self.allocator);
     }
 };
 
@@ -496,20 +497,20 @@ fn getCacheDir(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 fn urlEncode(allocator: std.mem.Allocator, input: []const u8) ![]const u8 {
-    var result = std.ArrayList(u8).init(allocator);
-    errdefer result.deinit();
-    
+    var result: std.ArrayList(u8) = .{};
+    errdefer result.deinit(allocator);
+
     for (input) |c| {
         if (std.ascii.isAlphanumeric(c) or c == '-' or c == '_' or c == '.' or c == '~') {
-            try result.append(c);
+            try result.append(allocator, c);
         } else if (c == ' ') {
-            try result.append('+');
+            try result.append(allocator, '+');
         } else {
-            try result.appendSlice(&[_]u8{ '%', hexDigit(c >> 4), hexDigit(c & 0x0F) });
+            try result.appendSlice(allocator, &[_]u8{ '%', hexDigit(c >> 4), hexDigit(c & 0x0F) });
         }
     }
-    
-    return result.toOwnedSlice();
+
+    return result.toOwnedSlice(allocator);
 }
 
 fn hexDigit(n: u8) u8 {
@@ -531,15 +532,15 @@ fn getMimeExtension(mime: []const u8) []const u8 {
 
 test "url encoding" {
     const allocator = std.testing.allocator;
-    
+
     const simple = try urlEncode(allocator, "hello");
     defer allocator.free(simple);
     try std.testing.expectEqualStrings("hello", simple);
-    
+
     const spaces = try urlEncode(allocator, "hello world");
     defer allocator.free(spaces);
     try std.testing.expectEqualStrings("hello+world", spaces);
-    
+
     const special = try urlEncode(allocator, "Stardew Valley");
     defer allocator.free(special);
     try std.testing.expectEqualStrings("Stardew+Valley", special);
@@ -557,4 +558,3 @@ test "mime extension" {
     try std.testing.expectEqualStrings(".jpg", getMimeExtension("image/jpeg"));
     try std.testing.expectEqualStrings(".webp", getMimeExtension("image/webp"));
 }
-

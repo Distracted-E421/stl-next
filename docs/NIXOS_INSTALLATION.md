@@ -27,7 +27,7 @@ Add STL-Next to your system flake:
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    stl-next.url = "github:yourusername/stl-next";  # Update when public
+    stl-next.url = "github:e421/stl-next";  # Or path:/path/to/stl-next
   };
 
   outputs = { self, nixpkgs, stl-next, ... }: {
@@ -49,10 +49,50 @@ Then in your configuration:
 {
   programs.stl-next = {
     enable = true;
-    # Optional: configure defaults
-    defaultProton = "GE-Proton9-25";
-    enableMangoHud = true;
-    enableGameMode = true;
+    registerNxmHandler = true;  # Auto-register as NXM protocol handler
+  };
+}
+```
+
+### Method 1b: Home Manager (User-Level)
+
+For per-user installation with Home Manager:
+
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+    stl-next.url = "github:e421/stl-next";
+  };
+
+  outputs = { self, nixpkgs, home-manager, stl-next, ... }: {
+    homeConfigurations."user@host" = home-manager.lib.homeManagerConfiguration {
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+      modules = [
+        ./home.nix
+        stl-next.homeManagerModules.default
+      ];
+    };
+  };
+}
+```
+
+Then in your home.nix:
+
+```nix
+# home.nix
+{
+  programs.stl-next = {
+    enable = true;
+    registerNxmHandler = true;
+    countdownSeconds = 10;
+    defaultTinkers = {
+      mangohud = false;
+      gamescope = false;
+      gamemode = true;  # Enable GameMode by default
+    };
   };
 }
 ```

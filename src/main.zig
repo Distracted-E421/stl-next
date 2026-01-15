@@ -1,22 +1,18 @@
 const std = @import("std");
 const builtin = @import("builtin");
+const compat = @import("compat.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // STL-NEXT: Steam Tinker Launch - Next Generation
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// A high-performance Steam game wrapper written in Zig.
+// A high-performance Steam game wrapper written in Zig 0.15.x
 // Replaces the 21,000-line Bash script with a type-safe, modular architecture.
 //
 // Design Pillars:
 // 1. PERFORMANCE: Sub-100ms launch overhead (vs 2-5s in Bash)
 // 2. MODULARITY: Strict separation of "Tinker" modules from core engine
 // 3. NIXOS NATIVE: No hardcoded paths, proper PATH resolution
-//
-// Phase 2 Features:
-// - Binary VDF streaming parser (<10ms for 200MB appinfo.vdf)
-// - LevelDB collections support (hidden games, categories)
-// - Fast AppID seeking
 //
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -46,15 +42,13 @@ const Command = enum {
     configure,
     install,
     benchmark,
-    wait,           // Phase 4: Run wait requester
-    nxm,            // Phase 4: Handle NXM link
-    tui,            // Phase 4: Run TUI client
-    // Phase 4.5: Non-Steam games
+    wait,
+    nxm,
+    tui,
     add_game,
     remove_game,
     list_nonsteam,
     import_heroic,
-    // Phase 4.5: SteamGridDB
     artwork,
     search_game,
     version,
@@ -66,18 +60,15 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Get command line arguments (Zig 0.13 API)
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    // Parse command
     if (args.len < 2) {
         printUsage();
         return;
     }
 
     const cmd_str = args[1];
-    // Convert hyphens to underscores for user-friendliness (list-games -> list_games)
     var cmd_buf: [64]u8 = undefined;
     var cmd_normalized: []const u8 = cmd_str;
     if (cmd_str.len <= cmd_buf.len) {
@@ -87,8 +78,8 @@ pub fn main() !void {
         }
         cmd_normalized = cmd_buf[0..cmd_str.len];
     }
+    
     const cmd = std.meta.stringToEnum(Command, cmd_normalized) orelse {
-        // Check if it's an AppID (numeric) - shorthand for 'run'
         if (std.fmt.parseInt(u32, cmd_str, 10)) |app_id| {
             try runGame(allocator, app_id, args[2..]);
             return;
@@ -150,7 +141,6 @@ pub fn main() !void {
             const app_id = try std.fmt.parseInt(u32, args[2], 10);
             try runTuiClient(allocator, app_id);
         },
-        // Phase 4.5: Non-Steam game management
         .add_game => {
             if (args.len < 4) {
                 std.log.err("Usage: stl-next add-game <name> <executable> [--windows|--native]", .{});
@@ -168,7 +158,6 @@ pub fn main() !void {
         },
         .list_nonsteam => try listNonSteamGames(allocator),
         .import_heroic => try importHeroicGames(allocator),
-        // Phase 4.5: SteamGridDB
         .artwork => {
             if (args.len < 3) {
                 std.log.err("Usage: stl-next artwork <AppID|GameName>", .{});
@@ -196,13 +185,11 @@ fn runGame(allocator: std.mem.Allocator, app_id: u32, extra_args: []const []cons
     std.log.info("╠══════════════════════════════════════════╣", .{});
     std.log.info("║ AppID: {d: <34} ║", .{app_id});
 
-    // Phase 1: Locate Steam installation
     var steam_engine = try steam.SteamEngine.init(allocator);
     defer steam_engine.deinit();
 
     std.log.info("║ Steam: {s: <34} ║", .{steam_engine.steam_path[0..@min(34, steam_engine.steam_path.len)]});
 
-    // Phase 2: Load game metadata (FAST binary VDF parsing)
     const game_info = steam_engine.getGameInfo(app_id) catch |err| {
         std.log.err("Failed to load game info: {}", .{err});
         return err;
@@ -210,7 +197,6 @@ fn runGame(allocator: std.mem.Allocator, app_id: u32, extra_args: []const []cons
 
     std.log.info("║ Game:  {s: <34} ║", .{game_info.name[0..@min(34, game_info.name.len)]});
     
-    // Show if game is hidden or has collections
     if (game_info.is_hidden) {
         std.log.info("║ Status: HIDDEN                           ║", .{});
     }
@@ -220,18 +206,15 @@ fn runGame(allocator: std.mem.Allocator, app_id: u32, extra_args: []const []cons
     
     std.log.info("╚══════════════════════════════════════════╝", .{});
 
-    // Phase 3: Load STL configuration for this game
     const game_config = config.loadGameConfig(allocator, app_id) catch |err| blk: {
         std.log.warn("No custom config for AppID {d}, using defaults: {}", .{ app_id, err });
         break :blk config.GameConfig.defaults(app_id);
     };
     _ = game_config;
 
-    // Phase 4: Build environment and launch
     const setup_time = timer.read();
     std.log.info("Setup completed in {d:.2}ms", .{@as(f64, @floatFromInt(setup_time)) / std.time.ns_per_ms});
 
-    // For now, just pass through to Proton/the game
     const result = try launcher.launch(allocator, &steam_engine, app_id, extra_args, false);
     if (!result.success) {
         if (result.error_msg) |msg| std.log.err("Launch failed: {s}", .{msg});
@@ -248,10 +231,18 @@ fn showGameInfo(allocator: std.mem.Allocator, app_id: u32) !void {
     const game_info = try steam_engine.getGameInfo(app_id);
     
     const lookup_time = timer.read();
+    const stdout = compat.stdout();
 
-    const stdout = std.io.getStdOut().writer();
+    var buf: [4096]u8 = undefined;
+    
+    const exec_str = if (game_info.executable) |e| try std.fmt.allocPrint(allocator, "\"{s}\"", .{e}) else try allocator.dupe(u8, "null");
+    defer allocator.free(exec_str);
+    const launch_str = if (game_info.launch_options) |l| try std.fmt.allocPrint(allocator, "\"{s}\"", .{l}) else try allocator.dupe(u8, "null");
+    defer allocator.free(launch_str);
+    const proton_str = if (game_info.proton_version) |p| try std.fmt.allocPrint(allocator, "\"{s}\"", .{p}) else try allocator.dupe(u8, "null");
+    defer allocator.free(proton_str);
 
-    try stdout.print(
+    const msg1 = try std.fmt.bufPrint(&buf,
         \\{{
         \\  "app_id": {d},
         \\  "name": "{s}",
@@ -266,23 +257,26 @@ fn showGameInfo(allocator: std.mem.Allocator, app_id: u32) !void {
         game_info.app_id,
         game_info.name,
         game_info.install_dir,
-        if (game_info.executable) |e| try std.fmt.allocPrint(allocator, "\"{s}\"", .{e}) else "null",
-        if (game_info.launch_options) |l| try std.fmt.allocPrint(allocator, "\"{s}\"", .{l}) else "null",
-        if (game_info.proton_version) |p| try std.fmt.allocPrint(allocator, "\"{s}\"", .{p}) else "null",
+        exec_str,
+        launch_str,
+        proton_str,
         game_info.playtime_minutes,
         game_info.is_hidden,
     });
+    try stdout.writeAll(msg1);
     
     for (game_info.collections, 0..) |col, i| {
-        try stdout.print("\"{s}\"{s}", .{ col, if (i < game_info.collections.len - 1) ", " else "" });
+        const col_msg = try std.fmt.bufPrint(&buf, "\"{s}\"{s}", .{ col, if (i < game_info.collections.len - 1) ", " else "" });
+        try stdout.writeAll(col_msg);
     }
     
-    try stdout.print(
+    const msg2 = try std.fmt.bufPrint(&buf,
         \\],
         \\  "_lookup_time_ms": {d:.3}
         \\}}
         \\
     , .{@as(f64, @floatFromInt(lookup_time)) / std.time.ns_per_ms});
+    try stdout.writeAll(msg2);
 }
 
 fn listGames(allocator: std.mem.Allocator) !void {
@@ -294,27 +288,30 @@ fn listGames(allocator: std.mem.Allocator) !void {
     const games = try steam_engine.listInstalledGames();
     
     const scan_time = timer.read();
-
-    const stdout = std.io.getStdOut().writer();
+    const stdout = compat.stdout();
+    var buf: [1024]u8 = undefined;
+    
     try stdout.writeAll("[\n");
 
     for (games, 0..) |game, i| {
-        try stdout.print(
+        const msg = try std.fmt.bufPrint(&buf,
             \\  {{"app_id": {d}, "name": "{s}", "hidden": {}}}{s}
+            \\
         , .{
             game.app_id,
             game.name,
             game.is_hidden,
             if (i < games.len - 1) "," else "",
         });
-        try stdout.writeAll("\n");
+        try stdout.writeAll(msg);
     }
 
-    try stdout.print(
+    const msg = try std.fmt.bufPrint(&buf,
         \\]
         \\// Found {d} games in {d:.2}ms
         \\
     , .{ games.len, @as(f64, @floatFromInt(scan_time)) / std.time.ns_per_ms });
+    try stdout.writeAll(msg);
 }
 
 fn listProtons(allocator: std.mem.Allocator) !void {
@@ -322,20 +319,22 @@ fn listProtons(allocator: std.mem.Allocator) !void {
     defer steam_engine.deinit();
 
     const protons = try steam_engine.listProtonVersions();
+    const stdout = compat.stdout();
+    var buf: [1024]u8 = undefined;
 
-    const stdout = std.io.getStdOut().writer();
     try stdout.writeAll("[\n");
 
     for (protons, 0..) |proton, i| {
-        try stdout.print(
+        const msg = try std.fmt.bufPrint(&buf,
             \\  {{"name": "{s}", "path": "{s}", "is_proton": {}}}{s}
+            \\
         , .{
             proton.name,
             proton.path,
             proton.is_proton,
             if (i < protons.len - 1) "," else "",
         });
-        try stdout.writeAll("\n");
+        try stdout.writeAll(msg);
     }
 
     try stdout.writeAll("]\n");
@@ -345,18 +344,19 @@ fn showCollections(allocator: std.mem.Allocator, app_id_str: ?[]const u8) !void 
     var steam_engine = try steam.SteamEngine.init(allocator);
     defer steam_engine.deinit();
 
-    const stdout = std.io.getStdOut().writer();
+    const stdout = compat.stdout();
+    var buf: [1024]u8 = undefined;
 
     if (app_id_str) |id_str| {
         const app_id = try std.fmt.parseInt(u32, id_str, 10);
         const collections = try steam_engine.getGameCollections(app_id);
         
-        try stdout.print(
-            \\{{"app_id": {d}, "collections": [
-        , .{app_id});
+        const msg1 = try std.fmt.bufPrint(&buf, "{{\"app_id\": {d}, \"collections\": [", .{app_id});
+        try stdout.writeAll(msg1);
         
         for (collections, 0..) |col, i| {
-            try stdout.print("\"{s}\"{s}", .{ col, if (i < collections.len - 1) ", " else "" });
+            const msg = try std.fmt.bufPrint(&buf, "\"{s}\"{s}", .{ col, if (i < collections.len - 1) ", " else "" });
+            try stdout.writeAll(msg);
         }
         
         try stdout.writeAll("]}\n");
@@ -367,7 +367,8 @@ fn showCollections(allocator: std.mem.Allocator, app_id_str: ?[]const u8) !void 
 }
 
 fn runBenchmark(allocator: std.mem.Allocator) !void {
-    const stdout = std.io.getStdOut().writer();
+    const stdout = compat.stdout();
+    var buf: [1024]u8 = undefined;
     
     try stdout.writeAll("\n");
     try stdout.writeAll("╔══════════════════════════════════════════════════════════════╗\n");
@@ -375,24 +376,22 @@ fn runBenchmark(allocator: std.mem.Allocator) !void {
     try stdout.writeAll("╚══════════════════════════════════════════════════════════════╝\n");
     try stdout.writeAll("\n");
 
-    // Benchmark: Steam path discovery
     {
         var timer = try std.time.Timer.start();
         var engine = try steam.SteamEngine.init(allocator);
         defer engine.deinit();
         const elapsed = timer.read();
         
-        try stdout.print("Steam Discovery:     {d:>8.2} ms\n", .{
+        const msg = try std.fmt.bufPrint(&buf, "Steam Discovery:     {d:>8.2} ms\n", .{
             @as(f64, @floatFromInt(elapsed)) / std.time.ns_per_ms,
         });
+        try stdout.writeAll(msg);
     }
 
-    // Benchmark: Single game lookup (binary VDF)
     {
         var engine = try steam.SteamEngine.init(allocator);
         defer engine.deinit();
         
-        // Try Stardew Valley (413150) or any common game
         const test_ids = [_]u32{ 413150, 489830, 620, 730, 570 };
         
         for (test_ids) |app_id| {
@@ -400,16 +399,16 @@ fn runBenchmark(allocator: std.mem.Allocator) !void {
             const info = engine.getGameInfo(app_id) catch continue;
             const elapsed = timer.read();
             
-            try stdout.print("Game Lookup ({d}): {d:>8.2} ms ({s})\n", .{
+            const msg = try std.fmt.bufPrint(&buf, "Game Lookup ({d}): {d:>8.2} ms ({s})\n", .{
                 app_id,
                 @as(f64, @floatFromInt(elapsed)) / std.time.ns_per_ms,
                 info.name[0..@min(20, info.name.len)],
             });
+            try stdout.writeAll(msg);
             break;
         }
     }
 
-    // Benchmark: List all games
     {
         var engine = try steam.SteamEngine.init(allocator);
         defer engine.deinit();
@@ -418,13 +417,13 @@ fn runBenchmark(allocator: std.mem.Allocator) !void {
         const games = try engine.listInstalledGames();
         const elapsed = timer.read();
         
-        try stdout.print("List All Games:      {d:>8.2} ms ({d} games)\n", .{
+        const msg = try std.fmt.bufPrint(&buf, "List All Games:      {d:>8.2} ms ({d} games)\n", .{
             @as(f64, @floatFromInt(elapsed)) / std.time.ns_per_ms,
             games.len,
         });
+        try stdout.writeAll(msg);
     }
 
-    // Benchmark: List Proton versions
     {
         var engine = try steam.SteamEngine.init(allocator);
         defer engine.deinit();
@@ -433,10 +432,11 @@ fn runBenchmark(allocator: std.mem.Allocator) !void {
         const protons = try engine.listProtonVersions();
         const elapsed = timer.read();
         
-        try stdout.print("List Protons:        {d:>8.2} ms ({d} versions)\n", .{
+        const msg = try std.fmt.bufPrint(&buf, "List Protons:        {d:>8.2} ms ({d} versions)\n", .{
             @as(f64, @floatFromInt(elapsed)) / std.time.ns_per_ms,
             protons.len,
         });
+        try stdout.writeAll(msg);
     }
 
     try stdout.writeAll("\n");
@@ -445,8 +445,7 @@ fn runBenchmark(allocator: std.mem.Allocator) !void {
 }
 
 fn printVersion() void {
-    const stdout = std.io.getStdOut().writer();
-    stdout.print(
+    compat.print(
         \\STL-Next v{s}
         \\Steam Tinker Launch - Next Generation
         \\
@@ -463,12 +462,11 @@ fn printVersion() void {
         \\
         \\https://github.com/e421/stl-next
         \\
-    , .{VERSION}) catch {};
+    , .{VERSION});
 }
 
 fn printUsage() void {
-    const stdout = std.io.getStdOut().writer();
-    stdout.writeAll(
+    compat.print(
         \\Usage: stl-next <command> [options]
         \\
         \\Steam Game Commands:
@@ -513,12 +511,9 @@ fn printUsage() void {
         \\  stl-next info 489830               # Show Skyrim SE info
         \\  stl-next list-games | jq '.[]'     # List games with jq
         \\  stl-next add-game "Celeste" ~/Games/Celeste/Celeste --native
-        \\  stl-next add-game "Hades" ~/Games/Hades/Hades.exe --windows
-        \\  stl-next import-heroic             # Import Epic/GOG games
         \\  stl-next artwork 413150            # Get Stardew Valley artwork
-        \\  stl-next search-game "Hollow Knight"  # Search SteamGridDB
         \\
-    ) catch {};
+    , .{});
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -530,23 +525,15 @@ fn runWaitRequester(allocator: std.mem.Allocator, app_id: u32) !void {
     std.log.info("║      STL-NEXT WAIT REQUESTER v{s}      ║", .{VERSION});
     std.log.info("╚════════════════════════════════════════════╝", .{});
 
-    // Get game info
     var steam_engine = try steam.SteamEngine.init(allocator);
     defer steam_engine.deinit();
 
     const game_info = try steam_engine.getGameInfo(app_id);
     std.log.info("Game: {s}", .{game_info.name});
 
-    // Load config
     var game_config = config.loadGameConfig(allocator, app_id) catch config.GameConfig.defaults(app_id);
 
-    // Start wait requester
-    var requester = try ui.WaitRequester.init(
-        allocator,
-        app_id,
-        game_info.name,
-        &game_config,
-    );
+    var requester = try ui.WaitRequester.init(allocator, app_id, game_info.name, &game_config);
     defer requester.deinit();
 
     const should_launch = try requester.run();
@@ -565,33 +552,26 @@ fn runWaitRequester(allocator: std.mem.Allocator, app_id: u32) !void {
 }
 
 fn runTuiClient(allocator: std.mem.Allocator, app_id: u32) !void {
-    // Get game info
     var steam_engine = try steam.SteamEngine.init(allocator);
     defer steam_engine.deinit();
 
     const game_info = try steam_engine.getGameInfo(app_id);
-
-    // Run TUI
     try ui.runTUI(allocator, app_id, game_info.name);
 }
 
 fn handleNxmLink(allocator: std.mem.Allocator, url: []const u8) !void {
     std.log.info("NXM Handler: {s}", .{url});
 
-    // Parse the link
     var link = try modding.NxmLink.parse(allocator, url);
     defer link.deinit(allocator);
 
-    // Display parsed info
     const formatted = try link.toDisplayString(allocator);
     defer allocator.free(formatted);
     std.log.info("  Parsed: {s}", .{formatted});
 
-    // Show if it's valid
     if (link.isValid()) {
         std.log.info("  Status: Valid link", .{});
         
-        // Get wine-safe encoded URL
         const encoded = try link.encodeForWine(allocator);
         defer allocator.free(encoded);
         std.log.debug("  Wine-safe: {s}", .{encoded});
@@ -599,7 +579,6 @@ fn handleNxmLink(allocator: std.mem.Allocator, url: []const u8) !void {
         std.log.warn("  Status: Incomplete or invalid link", .{});
     }
 
-    // Would forward to mod manager here
     std.log.info("NXM handling requires mod manager integration (MO2/Vortex)", .{});
 }
 
@@ -611,7 +590,6 @@ fn addNonSteamGame(allocator: std.mem.Allocator, name: []const u8, executable: [
     var manager = try nonsteam.NonSteamManager.init(allocator);
     defer manager.deinit();
     
-    // Parse platform from args
     var platform = nonsteam.Platform.native;
     for (extra_args) |arg| {
         if (std.mem.eql(u8, arg, "--windows")) {
@@ -626,7 +604,7 @@ fn addNonSteamGame(allocator: std.mem.Allocator, name: []const u8, executable: [
     }
     
     const game = nonsteam.NonSteamGame{
-        .id = 0, // Will be assigned
+        .id = 0,
         .name = try allocator.dupe(u8, name),
         .platform = platform,
         .executable = try allocator.dupe(u8, executable),
@@ -634,8 +612,7 @@ fn addNonSteamGame(allocator: std.mem.Allocator, name: []const u8, executable: [
     
     try manager.addGame(game);
     
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("Added non-Steam game: {s} ({s})\n", .{ name, @tagName(platform) });
+    compat.print("Added non-Steam game: {s} ({s})\n", .{ name, @tagName(platform) });
 }
 
 fn removeNonSteamGame(allocator: std.mem.Allocator, id: i32) !void {
@@ -645,8 +622,7 @@ fn removeNonSteamGame(allocator: std.mem.Allocator, id: i32) !void {
     if (manager.getGame(id)) |game| {
         const name = game.name;
         try manager.removeGame(id);
-        const stdout = std.io.getStdOut().writer();
-        try stdout.print("Removed non-Steam game: {s}\n", .{name});
+        compat.print("Removed non-Steam game: {s}\n", .{name});
     } else {
         std.log.err("Game with ID {d} not found", .{id});
     }
@@ -656,12 +632,14 @@ fn listNonSteamGames(allocator: std.mem.Allocator) !void {
     var manager = try nonsteam.NonSteamManager.init(allocator);
     defer manager.deinit();
     
-    const stdout = std.io.getStdOut().writer();
+    const stdout = compat.stdout();
+    var buf: [1024]u8 = undefined;
+    
     try stdout.writeAll("[\n");
     
     const games = manager.listGames();
     for (games, 0..) |game, i| {
-        try stdout.print(
+        const msg = try std.fmt.bufPrint(&buf,
             \\  {{
             \\    "id": {d},
             \\    "name": "{s}",
@@ -678,10 +656,12 @@ fn listNonSteamGames(allocator: std.mem.Allocator) !void {
             @tagName(game.source),
             if (i < games.len - 1) "," else "",
         });
+        try stdout.writeAll(msg);
     }
     
     try stdout.writeAll("]\n");
-    try stdout.print("// Found {d} non-Steam game(s)\n", .{games.len});
+    const msg = try std.fmt.bufPrint(&buf, "// Found {d} non-Steam game(s)\n", .{games.len});
+    try stdout.writeAll(msg);
 }
 
 fn importHeroicGames(allocator: std.mem.Allocator) !void {
@@ -693,8 +673,7 @@ fn importHeroicGames(allocator: std.mem.Allocator) !void {
         return;
     };
     
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("Imported {d} game(s) from Heroic\n", .{count});
+    compat.print("Imported {d} game(s) from Heroic\n", .{count});
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -712,13 +691,12 @@ fn fetchArtwork(allocator: std.mem.Allocator, identifier: []const u8) !void {
     };
     defer client.deinit();
     
-    const stdout = std.io.getStdOut().writer();
+    const stdout = compat.stdout();
+    var buf: [1024]u8 = undefined;
     
-    // Try to parse as AppID first
     if (std.fmt.parseInt(u32, identifier, 10)) |app_id| {
         std.log.info("Fetching artwork for Steam AppID {d}...", .{app_id});
         
-        // Fetch grid images
         const grids = client.getImagesByAppId(app_id, .grid) catch |err| {
             std.log.warn("Failed to fetch grids: {}", .{err});
             return;
@@ -729,27 +707,29 @@ fn fetchArtwork(allocator: std.mem.Allocator, identifier: []const u8) !void {
         }
         
         if (grids.len > 0) {
-            try stdout.print("Found {d} grid image(s):\n", .{grids.len});
+            const msg = try std.fmt.bufPrint(&buf, "Found {d} grid image(s):\n", .{grids.len});
+            try stdout.writeAll(msg);
+            
             for (grids[0..@min(5, grids.len)]) |grid| {
-                try stdout.print("  - {s} ({d}x{d}, score: {d})\n", .{
+                const msg2 = try std.fmt.bufPrint(&buf, "  - {s} ({d}x{d}, score: {d})\n", .{
                     grid.url[0..@min(60, grid.url.len)],
                     grid.width,
                     grid.height,
                     grid.score,
                 });
+                try stdout.writeAll(msg2);
             }
             
-            // Download the top-scored one
             if (grids.len > 0) {
                 const path = try client.downloadImage(&grids[0], .grid, app_id);
                 defer allocator.free(path);
-                try stdout.print("\nDownloaded to: {s}\n", .{path});
+                const msg3 = try std.fmt.bufPrint(&buf, "\nDownloaded to: {s}\n", .{path});
+                try stdout.writeAll(msg3);
             }
         } else {
             try stdout.writeAll("No grid images found.\n");
         }
     } else |_| {
-        // Search by name
         std.log.info("Searching SteamGridDB for '{s}'...", .{identifier});
         try searchSteamGridDB(allocator, identifier);
     }
@@ -772,21 +752,25 @@ fn searchSteamGridDB(allocator: std.mem.Allocator, name: []const u8) !void {
         allocator.free(results);
     }
     
-    const stdout = std.io.getStdOut().writer();
+    const stdout = compat.stdout();
+    var buf: [1024]u8 = undefined;
     
     if (results.len == 0) {
-        try stdout.print("No games found matching '{s}'\n", .{name});
+        const msg = try std.fmt.bufPrint(&buf, "No games found matching '{s}'\n", .{name});
+        try stdout.writeAll(msg);
         return;
     }
     
-    try stdout.print("Found {d} game(s) matching '{s}':\n\n", .{ results.len, name });
+    const msg = try std.fmt.bufPrint(&buf, "Found {d} game(s) matching '{s}':\n\n", .{ results.len, name });
+    try stdout.writeAll(msg);
     
     for (results[0..@min(10, results.len)]) |result| {
-        try stdout.print("  ID: {d: <8} {s}{s}\n", .{
+        const msg2 = try std.fmt.bufPrint(&buf, "  ID: {d: <8} {s}{s}\n", .{
             result.id,
             result.name,
             if (result.verified) " ✓" else "",
         });
+        try stdout.writeAll(msg2);
     }
     
     try stdout.writeAll("\nUse the ID to fetch artwork:\n");
@@ -807,32 +791,20 @@ test "appid parsing" {
     try std.testing.expectEqual(@as(u32, 413150), app_id);
 }
 
-// Import all test modules to run them
 test {
-    // Core modules
     _ = @import("core/config.zig");
     _ = @import("core/launcher.zig");
-    
-    // Engine modules
     _ = @import("engine/vdf.zig");
     _ = @import("engine/steam.zig");
     _ = @import("engine/appinfo.zig");
     _ = @import("engine/leveldb.zig");
     _ = @import("engine/nonsteam.zig");
     _ = @import("engine/steamgriddb.zig");
-    
-    // IPC modules
     _ = @import("ipc/protocol.zig");
     _ = @import("ipc/server.zig");
     _ = @import("ipc/client.zig");
-    
-    // Tinker modules
     _ = @import("tinkers/winetricks.zig");
     _ = @import("tinkers/customcmd.zig");
-    
-    // Modding modules
     _ = @import("modding/manager.zig");
-    
-    // Edge case tests (comprehensive hardening)
     _ = @import("tests/edge_cases.zig");
 }

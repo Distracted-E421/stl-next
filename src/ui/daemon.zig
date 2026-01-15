@@ -46,7 +46,7 @@ pub const WaitRequester = struct {
             requester.result = .LAUNCH;
             return requester;
         }
-        
+
         // Load initial tinker states from config
         requester.server.loadTinkerStates(
             game_config.mangohud.enabled,
@@ -100,7 +100,7 @@ pub const WaitRequester = struct {
 
             if (elapsed_seconds != last_second and self.server.state == .COUNTDOWN) {
                 last_second = elapsed_seconds;
-                
+
                 if (elapsed_seconds < self.countdown_seconds) {
                     self.server.countdown = @intCast(self.countdown_seconds - elapsed_seconds);
                     std.log.info("Wait Requester: {d}s remaining", .{self.server.countdown});
@@ -111,15 +111,15 @@ pub const WaitRequester = struct {
                 }
             }
 
-            std.time.sleep(50 * std.time.ns_per_ms);
+            std.Thread.sleep(50 * std.time.ns_per_ms);
         }
-        
+
         // Update config with final tinker states
         const states = self.server.getTinkerStates();
         self.game_config.mangohud.enabled = states.mangohud;
         self.game_config.gamescope.enabled = states.gamescope;
         self.game_config.gamemode.enabled = states.gamemode;
-        
+
         // Save updated config
         config.saveGameConfig(self.allocator, self.game_config) catch |err| {
             std.log.warn("Failed to save config: {}", .{err});
@@ -163,7 +163,7 @@ test "wait requester loads tinker states" {
     var game_config = config.GameConfig.defaults(413150);
     game_config.mangohud.enabled = true;
     game_config.gamemode.enabled = true;
-    
+
     var requester = try WaitRequester.init(
         std.testing.allocator,
         413150,
@@ -171,7 +171,7 @@ test "wait requester loads tinker states" {
         &game_config,
     );
     defer requester.deinit();
-    
+
     const states = requester.server.getTinkerStates();
     try std.testing.expect(states.mangohud);
     try std.testing.expect(states.gamemode);

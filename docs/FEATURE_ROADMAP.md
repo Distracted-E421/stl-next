@@ -27,9 +27,19 @@ This document tracks feature parity with the original SteamTinkerLaunch and plan
 |---------|-------------|----------|-------|
 | MO2 Integration | ✅ | 🚧 Basic | Detection only |
 | Vortex Integration | ✅ | 🚧 Basic | Detection only |
-| ReShade | ✅ | ❌ Phase 5 | Planned |
-| SpecialK | ✅ | ❌ Phase 5 | Planned |
-| GUI | ✅ (yad) | ❌ Phase 5 | Raylib planned |
+| ReShade | ✅ | ❌ Phase 6 | Planned |
+| SpecialK | ✅ | ❌ Phase 6 | Planned |
+| GUI | ✅ (yad) | ❌ Phase 5.5 | Raylib (next up!) |
+
+### ✅ Phase 5: Nix Packaging (Complete)
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Nix Flake | Build system with nixpkgs zig | ✅ |
+| NixOS Module | System-wide installation | ✅ |
+| Home Manager Module | User-level installation | ✅ |
+| NXM Handler Registration | Desktop entry for nxm:// | ✅ |
+| Zig 0.15.2 | Latest stable (upgraded from 0.14.0) | ✅ |
 
 ### ✅ Now Implemented (Phase 4.5)
 

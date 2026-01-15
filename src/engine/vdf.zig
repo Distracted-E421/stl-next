@@ -222,16 +222,16 @@ pub const BinaryParser = struct {
 
     /// Read a null-terminated string
     fn readNullString(self: *Self) ![]const u8 {
-        var buf = std.ArrayList(u8).init(self.allocator);
-        defer buf.deinit();
+        var buf: std.ArrayList(u8) = .{};
+        defer buf.deinit(self.allocator);
 
         while (true) {
             const byte = try self.reader.readByte();
             if (byte == 0) break;
-            try buf.append(byte);
+            try buf.append(self.allocator, byte);
         }
 
-        return try buf.toOwnedSlice();
+        return try buf.toOwnedSlice(self.allocator);
     }
 
     /// Parse a binary VDF value

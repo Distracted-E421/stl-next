@@ -26,7 +26,7 @@ pub const SteamEngine = struct {
         var engine = Self{
             .allocator = allocator,
             .steam_path = steam_path,
-            .library_folders = std.ArrayList([]const u8).init(allocator),
+            .library_folders = .{}, // Zig 0.15.x: unmanaged ArrayList
             .active_user_id = null,
             .installation_type = installation_type,
             .collections = null,
@@ -51,7 +51,7 @@ pub const SteamEngine = struct {
         for (self.library_folders.items) |path| {
             self.allocator.free(path);
         }
-        self.library_folders.deinit();
+        self.library_folders.deinit(self.allocator);
     }
 
     /// Get complete game information including launch options
@@ -230,8 +230,8 @@ pub const SteamEngine = struct {
     }
 
     pub fn listInstalledGames(self: *Self) ![]GameInfo {
-        var games = std.ArrayList(GameInfo).init(self.allocator);
-        errdefer games.deinit();
+        var games: std.ArrayList(GameInfo) = .{};
+        errdefer games.deinit(self.allocator);
 
         for (self.library_folders.items) |lib_path| {
             const steamapps_path = try std.fmt.allocPrint(
@@ -254,17 +254,17 @@ pub const SteamEngine = struct {
                     if (std.fmt.parseInt(u32, id_str, 10)) |app_id| {
                         if (self.isGameHidden(app_id)) continue;
                         const info = self.getGameInfo(app_id) catch continue;
-                        try games.append(info);
+                        try games.append(self.allocator, info);
                     } else |_| {}
                 }
             }
         }
-        return games.toOwnedSlice();
+        return games.toOwnedSlice(self.allocator);
     }
 
     pub fn listProtonVersions(self: *Self) ![]ProtonInfo {
-        var protons = std.ArrayList(ProtonInfo).init(self.allocator);
-        errdefer protons.deinit();
+        var protons: std.ArrayList(ProtonInfo) = .{};
+        errdefer protons.deinit(self.allocator);
 
         // User compatibility tools
         const compat_path = try std.fmt.allocPrint(
@@ -282,7 +282,7 @@ pub const SteamEngine = struct {
                     const tool_path = try std.fmt.allocPrint(
                         self.allocator, "{s}/{s}", .{ compat_path, entry.name },
                     );
-                    try protons.append(.{
+                    try protons.append(self.allocator, .{
                         .name = try self.allocator.dupe(u8, entry.name),
                         .path = tool_path,
                         .is_proton = std.mem.indexOf(u8, entry.name, "roton") != null,
@@ -307,7 +307,7 @@ pub const SteamEngine = struct {
                     const tool_path = try std.fmt.allocPrint(
                         self.allocator, "{s}/{s}", .{ common_path, entry.name },
                     );
-                    try protons.append(.{
+                    try protons.append(self.allocator, .{
                         .name = try self.allocator.dupe(u8, entry.name),
                         .path = tool_path,
                         .is_proton = true,
@@ -315,11 +315,11 @@ pub const SteamEngine = struct {
                 }
             }
         }
-        return protons.toOwnedSlice();
+        return protons.toOwnedSlice(self.allocator);
     }
 
     fn loadLibraryFolders(self: *Self) !void {
-        try self.library_folders.append(try self.allocator.dupe(u8, self.steam_path));
+        try self.library_folders.append(self.allocator, try self.allocator.dupe(u8, self.steam_path));
 
         const lib_vdf_path = try std.fmt.allocPrint(
             self.allocator, "{s}/steamapps/libraryfolders.vdf", .{self.steam_path},
@@ -345,7 +345,7 @@ pub const SteamEngine = struct {
                     }
                 }
                 if (!found) {
-                    try self.library_folders.append(try self.allocator.dupe(u8, path));
+                    try self.library_folders.append(self.allocator, try self.allocator.dupe(u8, path));
                 }
             }
             pos = path_pos + 1;

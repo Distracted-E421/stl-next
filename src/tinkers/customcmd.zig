@@ -75,8 +75,9 @@ pub const CommandEntry = struct {
 };
 
 /// Stored pre-launch state for cleanup
-var pre_launch_pids: std.ArrayList(std.process.Child.Id) = undefined;
+var pre_launch_pids: std.ArrayList(std.process.Child.Id) = .{};
 var pre_launch_init: bool = false;
+var pre_launch_allocator: ?std.mem.Allocator = null;
 
 fn isEnabled(ctx: *const Context) bool {
     const cfg = ctx.game_config.custom_commands;
@@ -91,7 +92,7 @@ fn preparePrefix(ctx: *const Context) !void {
     
     // Initialize PID tracking
     if (!pre_launch_init) {
-        pre_launch_pids = std.ArrayList(std.process.Child.Id).init(ctx.allocator);
+        pre_launch_allocator = ctx.allocator;
         pre_launch_init = true;
     }
     
@@ -163,7 +164,9 @@ fn runCommand(ctx: *const Context, entry: *const CommandEntry, cfg: CustomComman
     if (entry.background or !entry.wait) {
         // Fire and forget
         _ = try child.spawn();
-        try pre_launch_pids.append(child.id);
+        if (pre_launch_allocator) |alloc| {
+            try pre_launch_pids.append(alloc, child.id);
+        }
         std.log.debug("CustomCommands: Started background process PID {d}", .{child.id});
         return true;
     }
@@ -245,7 +248,9 @@ fn cleanup(ctx: *const Context) void {
             std.log.debug("CustomCommands: Cleaning up background PID {d}", .{pid});
             // We don't kill them - they were meant to run in background
         }
-        pre_launch_pids.clearAndFree();
+        if (pre_launch_allocator) |alloc| {
+            pre_launch_pids.clearAndFree(alloc);
+        }
     }
 }
 

@@ -4,12 +4,14 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // Main executable
+    // Main CLI executable (Zig 0.15.x API)
     const exe = b.addExecutable(.{
         .name = "stl-next",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     
     exe.linkLibC();
@@ -27,9 +29,11 @@ pub fn build(b: *std.Build) void {
 
     // Tests - only test through main.zig to get proper module resolution
     const main_tests = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     
     const run_main_tests = b.addRunArtifact(main_tests);
@@ -39,9 +43,11 @@ pub fn build(b: *std.Build) void {
     // Release build
     const release_exe = b.addExecutable(.{
         .name = "stl-next",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = .ReleaseFast,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = .ReleaseFast,
+        }),
     });
     release_exe.linkLibC();
     

@@ -17,47 +17,47 @@ fn modifyArgs(ctx: *const interface.Context, args: *interface.ArgList) !void {
     const cfg = &ctx.game_config.gamescope;
 
     // Build gamescope command prefix
-    var gs_args = std.ArrayList([]const u8).init(ctx.allocator);
-    defer gs_args.deinit();
+    var gs_args: std.ArrayList([]const u8) = .{};
+    defer gs_args.deinit(ctx.allocator);
 
-    try gs_args.append("gamescope");
+    try gs_args.append(ctx.allocator, "gamescope");
 
     // Output resolution
     if (cfg.width > 0 and cfg.height > 0) {
-        try gs_args.append("-W");
-        try gs_args.append(try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.width}));
-        try gs_args.append("-H");
-        try gs_args.append(try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.height}));
+        try gs_args.append(ctx.allocator, "-W");
+        try gs_args.append(ctx.allocator, try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.width}));
+        try gs_args.append(ctx.allocator, "-H");
+        try gs_args.append(ctx.allocator, try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.height}));
     }
 
     // Internal resolution
     if (cfg.internal_width > 0 and cfg.internal_height > 0) {
-        try gs_args.append("-w");
-        try gs_args.append(try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.internal_width}));
-        try gs_args.append("-h");
-        try gs_args.append(try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.internal_height}));
+        try gs_args.append(ctx.allocator, "-w");
+        try gs_args.append(ctx.allocator, try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.internal_width}));
+        try gs_args.append(ctx.allocator, "-h");
+        try gs_args.append(ctx.allocator, try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.internal_height}));
     }
 
     // Display mode
-    if (cfg.fullscreen) try gs_args.append("-f");
-    if (cfg.borderless) try gs_args.append("-b");
+    if (cfg.fullscreen) try gs_args.append(ctx.allocator, "-f");
+    if (cfg.borderless) try gs_args.append(ctx.allocator, "-b");
 
     // Upscaling
     if (cfg.fsr) {
-        try gs_args.append("-F");
-        try gs_args.append("fsr");
-        try gs_args.append("--fsr-sharpness");
-        try gs_args.append(try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.fsr_sharpness}));
+        try gs_args.append(ctx.allocator, "-F");
+        try gs_args.append(ctx.allocator, "fsr");
+        try gs_args.append(ctx.allocator, "--fsr-sharpness");
+        try gs_args.append(ctx.allocator, try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.fsr_sharpness}));
     }
 
     // FPS limit
     if (cfg.fps_limit > 0) {
-        try gs_args.append("-r");
-        try gs_args.append(try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.fps_limit}));
+        try gs_args.append(ctx.allocator, "-r");
+        try gs_args.append(ctx.allocator, try std.fmt.allocPrint(ctx.allocator, "{d}", .{cfg.fps_limit}));
     }
 
     // Separator
-    try gs_args.append("--");
+    try gs_args.append(ctx.allocator, "--");
 
     // Prepend gamescope args to existing command
     // We need to insert at the beginning, so we rebuild the list
@@ -67,10 +67,10 @@ fn modifyArgs(ctx: *const interface.Context, args: *interface.ArgList) !void {
     args.clearRetainingCapacity();
 
     for (gs_args.items) |arg| {
-        try args.append(arg);
+        try args.append(ctx.allocator, arg);
     }
     for (original_items) |arg| {
-        try args.append(arg);
+        try args.append(ctx.allocator, arg);
     }
 
     std.log.info("Gamescope: Wrapping with {d}x{d} @ {d}fps", .{
