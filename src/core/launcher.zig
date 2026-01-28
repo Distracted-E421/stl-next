@@ -21,13 +21,13 @@ pub const LaunchResult = struct {
     pub fn deinit(self: *const LaunchResult) void {
         // Only free inner strings if we duplicated them
         if (self.owns_strings) {
-            for (self.command) |cmd| {
-                self.allocator.free(cmd);
+        for (self.command) |cmd| {
+            self.allocator.free(cmd);
             }
         }
         // Always free the outer slice
         if (self.command.len > 0) {
-            self.allocator.free(self.command);
+        self.allocator.free(self.command);
         }
     }
 };

@@ -196,13 +196,13 @@ pub const SteamEngine = struct {
         // Phase 3: Fallback - any valid .exe
         dir = std.fs.openDirAbsolute(install_dir, .{ .iterate = true }) catch return null;
         {
-            var iter = dir.iterate();
-            while (try iter.next()) |entry| {
-                if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".exe")) {
+        var iter = dir.iterate();
+        while (try iter.next()) |entry| {
+            if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".exe")) {
                     if (isNonGameExecutable(entry.name)) continue;
-                    return try std.fmt.allocPrint(
-                        self.allocator, "{s}/{s}", .{ install_dir, entry.name },
-                    );
+                return try std.fmt.allocPrint(
+                    self.allocator, "{s}/{s}", .{ install_dir, entry.name },
+                );
                 }
             }
         }
