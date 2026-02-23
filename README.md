@@ -1,5 +1,9 @@
 # STL-Next: Steam Tinker Launch - Next Generation
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Zig](https://img.shields.io/badge/Zig-0.12-blue.svg)](https://ziglang.org/)
+[![NixOS](https://img.shields.io/badge/NixOS-flake-blue.svg)](flake.nix)
+
 A high-performance Steam game wrapper written in Zig, hoping to replace the original [SteamTinkerLaunch](https://github.com/sonic2kk/steamtinkerlaunch).
 
 ## 🎯 Why This Fork Exists
